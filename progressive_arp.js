@@ -153,6 +153,14 @@ var PluginParameters = [
     defaultValue: 20,
     unit: "%"
   },
+  {
+    name: "Gate Steps (per side)",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 4
+  },
 
   // --- VELOCITY SERIES GAUGE ---
   {
@@ -183,6 +191,14 @@ var PluginParameters = [
     maxValue: 64,
     numberOfSteps: 64,
     defaultValue: 25
+  },
+  {
+    name: "Velocity Steps (per side)",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 4
   }
 ];
 
@@ -210,11 +226,13 @@ var PARAM_GATE = 15;
 var PARAM_GATE_ACTIVE = 16;
 var PARAM_GATE_SPREAD_DOWN = 17;
 var PARAM_GATE_SPREAD_UP = 18;
+var PARAM_GATE_STEPS = 19;
 
-var PARAM_VEL_BASE = 19;
-var PARAM_VEL_ACTIVE = 20;
-var PARAM_VEL_SPREAD_DOWN = 21;
-var PARAM_VEL_SPREAD_UP = 22;
+var PARAM_VEL_BASE = 20;
+var PARAM_VEL_ACTIVE = 21;
+var PARAM_VEL_SPREAD_DOWN = 22;
+var PARAM_VEL_SPREAD_UP = 23;
+var PARAM_VEL_STEPS = 24;
 
 // ----------------------------------------------------------------------------
 // STATE
@@ -235,15 +253,14 @@ var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNot
 //
 // kind "range":  the series walks whole values from (base - spreadDown) to (base + spreadUp),
 //                clamped to [minValue, maxValue]. Position = the value itself.
-// kind "scaled": the series walks steps k = -SCALED_STEPS..+SCALED_STEPS around the base;
-//                spreadDown / spreadUp set the total distance covered on each side.
+// kind "scaled": the series walks steps k = -steps..+steps around the base, where steps
+//                (per side) comes from stepsParam; spreadDown / spreadUp set the total
+//                distance covered on each side.
 //                Position = k (0 is exactly the base). A side with zero spread has no steps.
 //
 // baseOffset converts the base parameter to a series value (e.g. subdivision menu index -> n).
 // cycleOnly series advance only at the end of an arp cycle, even when Advance Trigger is
 // "Per Note Step" (switching patterns on every note just scrambles them).
-var SCALED_STEPS = 4;
-
 var SERIES = {
   pattern: {
     kind: "range", baseParam: PARAM_PATTERN, baseOffset: 0, activeParam: PARAM_PAT_ACTIVE,
@@ -263,12 +280,12 @@ var SERIES = {
   },
   gate: {
     kind: "scaled", baseParam: PARAM_GATE, baseOffset: 0, activeParam: PARAM_GATE_ACTIVE,
-    spreadDownParam: PARAM_GATE_SPREAD_DOWN, spreadUpParam: PARAM_GATE_SPREAD_UP,
+    spreadDownParam: PARAM_GATE_SPREAD_DOWN, spreadUpParam: PARAM_GATE_SPREAD_UP, stepsParam: PARAM_GATE_STEPS,
     minValue: 10, maxValue: 100 // gate %
   },
   velocity: {
     kind: "scaled", baseParam: PARAM_VEL_BASE, baseOffset: 0, activeParam: PARAM_VEL_ACTIVE,
-    spreadDownParam: PARAM_VEL_SPREAD_DOWN, spreadUpParam: PARAM_VEL_SPREAD_UP,
+    spreadDownParam: PARAM_VEL_SPREAD_DOWN, spreadUpParam: PARAM_VEL_SPREAD_UP, stepsParam: PARAM_VEL_STEPS,
     minValue: 1, maxValue: 127 // MIDI velocity
   }
 };
@@ -353,10 +370,11 @@ function getSeriesBounds(name) {
   var spreadDown = GetParameter(def.spreadDownParam);
   var spreadUp = GetParameter(def.spreadUpParam);
   if (def.kind === "scaled") {
+    var steps = GetParameter(def.stepsParam);
     return {
-      minPos: (spreadDown > 0) ? -SCALED_STEPS : 0,
+      minPos: (spreadDown > 0) ? -steps : 0,
       basePos: 0,
-      maxPos: (spreadUp > 0) ? SCALED_STEPS : 0
+      maxPos: (spreadUp > 0) ? steps : 0
     };
   }
   var base = getSeriesBase(name);
@@ -374,11 +392,12 @@ function getSeriesValueAt(name, pos) {
     return pos;
   }
   var base = getSeriesBase(name);
+  var steps = GetParameter(def.stepsParam);
   var value = base;
   if (pos < 0) {
-    value = base - Math.round((GetParameter(def.spreadDownParam) * Math.abs(pos)) / SCALED_STEPS);
+    value = base - Math.round((GetParameter(def.spreadDownParam) * Math.abs(pos)) / steps);
   } else if (pos > 0) {
-    value = base + Math.round((GetParameter(def.spreadUpParam) * pos) / SCALED_STEPS);
+    value = base + Math.round((GetParameter(def.spreadUpParam) * pos) / steps);
   }
   return Math.min(def.maxValue, Math.max(def.minValue, value));
 }

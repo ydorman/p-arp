@@ -14,8 +14,8 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - **Pattern**: The `Arp Pattern` menu is the base; spread 0–5 steps to neighbouring patterns in menu order (Up, Down, Up/Down, Down/Up, As Played, Random).
   - **Octave Range**: Base 1–4 octaves, spread 0–3 in each direction (clamped to 1–4).
   - **Subdivision ($2^n$)**: Base $1/2$ … $1/64$, spread 0–3 steps slower/faster (clamped to $1/2$ … $1/64$).
-  - **Gate Length**: Base 10–100%; 4 steps below and above the base, with the spread (0–90%) setting the total distance on each side (clamped to 10–100%).
-  - **Velocity**: Base 1–127; the series has 4 steps below and 4 steps above the base, and the spread (0–64) sets the total velocity distance covered on each side.
+  - **Gate Length**: Base 10–100%; `Gate Steps (per side)` (1–8, default 4) sets how many steps the series takes below and above the base, and the spread (0–90%) sets the total distance on each side (clamped to 10–100%).
+  - **Velocity**: Base 1–127; `Velocity Steps (per side)` (1–8, default 4) sets how many steps the series takes below and above the base, and the spread (0–64) sets the total velocity distance covered on each side. E.g. base 70, spread ±24, 2 steps → 46, 58, 70, 82, 94.
 - **Mod Active toggles**: Each parameter can be modulated independently; when off it uses its base value.
 - **Progression Shape**: How the series traverses its range:
   - `Up` (sawtooth: min → max, then jump back to min)

@@ -133,6 +133,47 @@ describe("velocity series values", () => {
   });
 });
 
+describe("configurable steps", () => {
+  it("velocity steps per side set the series resolution", () => {
+    const { ctx } = arp({
+      PARAM_VEL_BASE: 70, PARAM_VEL_ACTIVE: 1, PARAM_VEL_SPREAD_DOWN: 24, PARAM_VEL_SPREAD_UP: 24, PARAM_VEL_STEPS: 2,
+    });
+    const b = ctx.getSeriesBounds("velocity");
+    assert.deepEqual([b.minPos, b.maxPos], [-2, 2]);
+    assert.deepEqual([-2, -1, 0, 1, 2].map((pos) => ctx.getSeriesValueAt("velocity", pos)), [46, 58, 70, 82, 94]);
+  });
+
+  it("a single step jumps straight to the spread ends", () => {
+    const { ctx } = arp({
+      PARAM_GATE: 60, PARAM_GATE_ACTIVE: 1, PARAM_GATE_SPREAD_DOWN: 30, PARAM_GATE_SPREAD_UP: 40, PARAM_GATE_STEPS: 1,
+    });
+    assert.deepEqual([-1, 0, 1].map((pos) => ctx.getSeriesValueAt("gate", pos)), [30, 60, 100]);
+  });
+
+  it("gate and velocity steps are independent", () => {
+    const { ctx } = arp({ PARAM_GATE_STEPS: 8, PARAM_VEL_STEPS: 1 });
+    assert.equal(ctx.getSeriesBounds("gate").maxPos, 8);
+    assert.equal(ctx.getSeriesBounds("velocity").maxPos, 1);
+  });
+
+  it("plays the shorter velocity walk during playback", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_VEL_ACTIVE: 1, PARAM_VEL_BASE: 70, PARAM_VEL_SPREAD_DOWN: 24, PARAM_VEL_SPREAD_UP: 24, PARAM_VEL_STEPS: 2,
+      PARAM_ADVANCE_TRIGGER: TRIGGER.STEP, PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    host.noteOn(60);
+    host.play(3);
+    assert.deepEqual(before(host.noteOns(), 4).map((n) => n.velocity), [46, 58, 70, 82, 94, 46]);
+  });
+
+  it("reducing steps restarts a series that falls outside the new range", () => {
+    const host = arp({ PARAM_VEL_ACTIVE: 1, PARAM_VEL_STEPS: 8, PARAM_PROG_SHAPE: SHAPE.DOWN });
+    assert.equal(host.ctx.seriesState.velocity.pos, 8);
+    host.setParam(host.ctx.PARAM_VEL_STEPS, 3);
+    assert.equal(host.ctx.seriesState.velocity.pos, 3);
+  });
+});
+
 describe("gate series values", () => {
   it("returns the base when gate mod is off", () => {
     const { ctx } = arp({ PARAM_GATE: 80, PARAM_GATE_ACTIVE: 0 });

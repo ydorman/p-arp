@@ -43,9 +43,9 @@ When playing a C major chord ($C_4 - E_4 - G_4$):
 ## 2. Additional Features & Roadmap
 
 1. ✅ **Progression over pattern as target**: Modulates the arp pattern sequence across the series. The `Arp Pattern` menu is the base, and `Spread (-)` / `Spread (+)` select neighbouring patterns in menu order (Up, Down, Up/Down, Down/Up, As Played, Random). Always advances per arp cycle, even when Advance Trigger is "Per Note Step". *(Status: Implemented)*
-2. ✅ **Progression over gate length as target**: Modulates gate length (staccato $\to$ legato). `Gate Length` is the base; like velocity, the series has 4 steps on each side and the spread sets the % distance covered (clamped to 10–100%). *(Status: Implemented)*
+2. ✅ **Progression over gate length as target**: Modulates gate length (staccato $\to$ legato). `Gate Length` is the base; like velocity, the series has a configurable number of steps on each side (see #4) and the spread sets the % distance covered (clamped to 10–100%). *(Status: Implemented)*
 3. ✅ **Base as centerpoint of series**: `Base` serves as the primary musical center (Arp Pattern, Base Octave, Base Subdivision, Gate Length, Velocity Base), while `Spread (-)` and `Spread (+)` define how far below and above the base the series modulates. Moving the Base dynamically shifts the entire series range while keeping relative modulation intact. *(Status: Implemented)*
-4. **Configurable number of steps**: User-defined step counts instead of hardcoded 1..8 range.
+4. ✅ **Configurable number of steps**: User-defined step counts instead of hardcoded 1..8 range. Gate and Velocity each have a `Steps (per side)` control (1–8, default 4) setting how many steps the series takes on each side of the base; the spread sets the distance. Pattern, Octave and Subdivision step through whole values, so their spread already is the step count. *(Status: Implemented)*
 5. **Humanization / Randomization**: Add subtle note length and velocity randomization independent of the series.
 6. **Linked series parameters**: A toggle/button to link and progress all active targets in lockstep.
 7. **Render output to MIDI region**: Capture/record generated arp notes directly into Logic's arrangement track.
