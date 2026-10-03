@@ -75,14 +75,6 @@ var PluginParameters = [
     numberOfSteps: 3,
     defaultValue: 1
   },
-  {
-    name: "Max Octaves (Modulo)",
-    type: "lin",
-    minValue: 1,
-    maxValue: 4,
-    numberOfSteps: 3,
-    defaultValue: 4
-  },
 
   // --- SUBDIVISION SERIES GAUGE ---
   {
@@ -156,17 +148,16 @@ var PARAM_BASE_OCTAVE = 5;
 var PARAM_OCT_ACTIVE = 6;
 var PARAM_OCT_SPREAD_DOWN = 7;
 var PARAM_OCT_SPREAD_UP = 8;
-var PARAM_OCT_MAX = 9;
 
-var PARAM_BASE_SUBDIV = 10;
-var PARAM_SUB_ACTIVE = 11;
-var PARAM_SUB_SPREAD_DOWN = 12;
-var PARAM_SUB_SPREAD_UP = 13;
+var PARAM_BASE_SUBDIV = 9;
+var PARAM_SUB_ACTIVE = 10;
+var PARAM_SUB_SPREAD_DOWN = 11;
+var PARAM_SUB_SPREAD_UP = 12;
 
-var PARAM_VEL_BASE = 14;
-var PARAM_VEL_ACTIVE = 15;
-var PARAM_VEL_SPREAD_DOWN = 16;
-var PARAM_VEL_SPREAD_UP = 17;
+var PARAM_VEL_BASE = 13;
+var PARAM_VEL_ACTIVE = 14;
+var PARAM_VEL_SPREAD_DOWN = 15;
+var PARAM_VEL_SPREAD_UP = 16;
 
 // ----------------------------------------------------------------------------
 // STATE
@@ -178,7 +169,7 @@ var currentStepIndex = 0;
 var nextBeatToSchedule = 0;
 var wasPlaying = false;
 var lastBlockStartBeat = -1;   // Track previous block to detect loop wraps
-var activeSoundingPitches = {};// Currently ringing notes: { pitch: true }
+var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNoteOffBeat }
 
 // Series counters & direction state (for Up-Down / Triangle bounce)
 var currentOctaveN = 1;
@@ -205,6 +196,15 @@ function stopAllSoundingNotes() {
     }
   }
   activeSoundingPitches = {};
+}
+
+// Forget notes whose scheduled NoteOff has already been sent
+function pruneSoundingNotes(currentBeat) {
+  for (var pitchStr in activeSoundingPitches) {
+    if (activeSoundingPitches.hasOwnProperty(pitchStr) && activeSoundingPitches[pitchStr] <= currentBeat) {
+      delete activeSoundingPitches[pitchStr];
+    }
+  }
 }
 
 function getActiveNotes() {
@@ -287,12 +287,6 @@ function getVelocityBounds() {
   return { baseK: 0, minK: minK, maxK: maxK };
 }
 
-// Wrap a series value n according to a max stage modulo
-// E.g. for max 4: n=1->1, n=4->4, n=5->1, n=6->2
-function moduloStage(n, maxStages) {
-  return ((n - 1) % maxStages) + 1;
-}
-
 // Step a series value across [minVal, maxVal] according to shape:
 // 0 = Up (Sawtooth: min -> max -> min)
 // 1 = Down (Sawtooth: max -> min -> max)
@@ -345,48 +339,44 @@ function stepSeriesValue(currentVal, currentDir, minVal, maxVal, shape) {
   return { val: val, dir: dir };
 }
 
+// Starting point of a series for the chosen shape:
+// Up starts at min, Down starts at max, Up-Down (Triangle) starts at the Base centerpoint
+function getSeriesStart(shape, minVal, base, maxVal) {
+  if (shape === 0) {
+    return { val: minVal, dir: 1 };
+  } else if (shape === 1) {
+    return { val: maxVal, dir: -1 };
+  }
+  return { val: base, dir: (base < maxVal) ? 1 : -1 };
+}
+
+function resetOctaveSeries(shape) {
+  var oct = getOctaveBounds();
+  var start = getSeriesStart(shape, oct.minVal, oct.base, oct.maxVal);
+  currentOctaveN = start.val;
+  octaveDir = start.dir;
+}
+
+function resetSubdivSeries(shape) {
+  var sub = getSubdivBounds();
+  var start = getSeriesStart(shape, sub.minVal, sub.base, sub.maxVal);
+  currentSubdivN = start.val;
+  subdivDir = start.dir;
+}
+
+function resetVelocitySeries(shape) {
+  var vel = getVelocityBounds();
+  var start = getSeriesStart(shape, vel.minK, vel.baseK, vel.maxK);
+  currentVelocityStep = start.val;
+  velocityDir = start.dir;
+}
+
 // Reset series counters and directions based on chosen shape and ranges around Base
 function resetSeriesState() {
   var shape = GetParameter(PARAM_PROG_SHAPE);
-
-  // Octave (centered on Base Octave Range)
-  var oct = getOctaveBounds();
-  if (shape === 0) { // Up starts at min
-    currentOctaveN = oct.minVal;
-    octaveDir = 1;
-  } else if (shape === 1) { // Down starts at max
-    currentOctaveN = oct.maxVal;
-    octaveDir = -1;
-  } else { // Up-Down starts at Base centerpoint
-    currentOctaveN = oct.base;
-    octaveDir = (oct.base < oct.maxVal) ? 1 : -1;
-  }
-
-  // Subdivision (centered on Base Subdivision)
-  var sub = getSubdivBounds();
-  if (shape === 0) { // Up starts at min
-    currentSubdivN = sub.minVal;
-    subdivDir = 1;
-  } else if (shape === 1) { // Down starts at max
-    currentSubdivN = sub.maxVal;
-    subdivDir = -1;
-  } else { // Up-Down starts at Base centerpoint
-    currentSubdivN = sub.base;
-    subdivDir = (sub.base < sub.maxVal) ? 1 : -1;
-  }
-
-  // Velocity (centered on Velocity Base, k=0)
-  var vel = getVelocityBounds();
-  if (shape === 0) { // Up starts at min
-    currentVelocityStep = vel.minK;
-    velocityDir = 1;
-  } else if (shape === 1) { // Down starts at max
-    currentVelocityStep = vel.maxK;
-    velocityDir = -1;
-  } else { // Up-Down starts at Base centerpoint (k=0)
-    currentVelocityStep = 0;
-    velocityDir = (vel.maxK > 0) ? 1 : -1;
-  }
+  resetOctaveSeries(shape);
+  resetSubdivSeries(shape);
+  resetVelocitySeries(shape);
 }
 
 // Advance series for all active modulations
@@ -445,8 +435,7 @@ function rebuildSequence() {
   // Determine current octave count
   var octaves = GetParameter(PARAM_BASE_OCTAVE);
   if (GetParameter(PARAM_OCT_ACTIVE)) {
-    var maxOct = GetParameter(PARAM_OCT_MAX);
-    octaves = moduloStage(currentOctaveN, maxOct);
+    octaves = currentOctaveN;
   }
 
   // Sort notes by pitch for standard patterns
@@ -547,7 +536,17 @@ function handleNoteOn(pitch, velocity) {
   }
 
   if (isLatch) {
-    latchedNotes.push({ pitch: pitch, velocity: velocity });
+    var latchedExists = false;
+    for (var j = 0; j < latchedNotes.length; j++) {
+      if (latchedNotes[j].pitch === pitch) {
+        latchedNotes[j].velocity = velocity;
+        latchedExists = true;
+        break;
+      }
+    }
+    if (!latchedExists) {
+      latchedNotes.push({ pitch: pitch, velocity: velocity });
+    }
   }
 
   rebuildSequence();
@@ -606,6 +605,7 @@ function ProcessMIDI() {
     nextBeatToSchedule = quantizeBeatToGrid(info.blockStartBeat, getSubdivisionBeatLength(wrapSubdivN));
   }
   lastBlockStartBeat = info.blockStartBeat;
+  pruneSoundingNotes(info.blockStartBeat);
 
   var activeNotes = getActiveNotes();
   if (activeNotes.length === 0 || sequenceNotes.length === 0) {
@@ -676,8 +676,9 @@ function ProcessMIDI() {
     noteOff.velocity = 64;
     noteOff.sendAtBeat(noteOffBeat);
 
-    // Track active sounding pitch
-    activeSoundingPitches[noteData.pitch] = true;
+    // Track active sounding pitch until its NoteOff beat
+    var prevOffBeat = activeSoundingPitches[noteData.pitch];
+    activeSoundingPitches[noteData.pitch] = (prevOffBeat !== undefined) ? Math.max(prevOffBeat, noteOffBeat) : noteOffBeat;
 
     // F. Advance step index
     var advanceTrigger = GetParameter(PARAM_ADVANCE_TRIGGER); // 0 = Per Cycle, 1 = Per Step
@@ -713,28 +714,19 @@ function ParameterChanged(param, value) {
   // Octave bounds around Base Octave
   var oct = getOctaveBounds();
   if (currentOctaveN < oct.minVal || currentOctaveN > oct.maxVal || param === PARAM_OCT_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_BASE_OCTAVE) {
-    if (shape === 0) currentOctaveN = oct.minVal;
-    else if (shape === 1) currentOctaveN = oct.maxVal;
-    else currentOctaveN = oct.base;
-    octaveDir = (shape === 1) ? -1 : 1;
+    resetOctaveSeries(shape);
   }
 
   // Subdivision bounds around Base Subdivision
   var sub = getSubdivBounds();
   if (currentSubdivN < sub.minVal || currentSubdivN > sub.maxVal || param === PARAM_SUB_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_BASE_SUBDIV) {
-    if (shape === 0) currentSubdivN = sub.minVal;
-    else if (shape === 1) currentSubdivN = sub.maxVal;
-    else currentSubdivN = sub.base;
-    subdivDir = (shape === 1) ? -1 : 1;
+    resetSubdivSeries(shape);
   }
 
   // Velocity bounds around Base Velocity
   var vel = getVelocityBounds();
   if (currentVelocityStep < vel.minK || currentVelocityStep > vel.maxK || param === PARAM_VEL_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_VEL_BASE) {
-    if (shape === 0) currentVelocityStep = vel.minK;
-    else if (shape === 1) currentVelocityStep = vel.maxK;
-    else currentVelocityStep = 0;
-    velocityDir = (shape === 1) ? -1 : 1;
+    resetVelocitySeries(shape);
   }
 
   rebuildSequence();

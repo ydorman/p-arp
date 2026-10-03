@@ -2,21 +2,30 @@
 
 A collection of MIDI effect scripts and prototypes for Logic Pro Scripter, exploring progressive and mathematical series modulation applied to arpeggiators and sequencers.
 
+See [Features.md](Features.md) for the product definition and roadmap.
+
 ## Projects
 
 ### 1. Progressive Arpeggiator (`progressive_arp.js`)
-A Logic Pro Scripter MIDI FX plugin that modulates parameters (Octave Range, Subdivision, Velocity) dynamically using arithmetic progressions ($1..8$) across arp cycles or note steps.
+A Logic Pro Scripter MIDI FX plugin whose parameters (Octave Range, Subdivision, Velocity) move through a series of values as the arpeggio plays, instead of staying fixed.
 
 #### Key Features
-- **Dynamic Series Gauges (1..8)**: Apply arithmetic series modulation to:
-  - **Octave Range**: Expands or shrinks the octave window cycle-by-cycle (with configurable modulo wrapping).
-  - **Subdivisions ($2^n$)**: Powers of 2 rate transitions ($1/2$, $1/4$, $1/8$, $1/16$, $1/32$, $1/64$).
-  - **Velocity Curve**: Linear velocity scaling: $\text{round}\left(\frac{127 - \text{base}}{8} \cdot n + \text{base}\right)$.
-- **Musical Grid Locking**: Automatic phase quantization prevents beat drift when changing rates or moving sliders mid-performance.
-- **DAW Loop Wrap Safety**: Automatic detection of cycle wraps and stops to eliminate stuck/hanging MIDI notes.
-- **Chord Latching & Patterns**: Up, Down, Up/Down, Down/Up, As Played, and Random.
+- **Base + Spread series**: Each modulated parameter has a `Base` value (its musical center) plus `Spread (-)` and `Spread (+)` controls that set how far below and above the base the series travels. Moving the base shifts the whole range.
+  - **Octave Range**: Base 1–4 octaves, spread 0–3 in each direction (clamped to 1–4).
+  - **Subdivision ($2^n$)**: Base $1/2$ … $1/64$, spread 0–3 steps slower/faster (clamped to $1/2$ … $1/64$).
+  - **Velocity**: Base 1–127; the series has 4 steps below and 4 steps above the base, and the spread (0–64) sets the total velocity distance covered on each side.
+- **Mod Active toggles**: Each parameter can be modulated independently; when off it uses its base value.
+- **Progression Shape**: How the series traverses its range:
+  - `Up` (sawtooth: min → max, then jump back to min)
+  - `Down` (sawtooth: max → min, then jump back to max)
+  - `Up-Down (Triangle)` (starts at base → max → min → base …)
+- **Advance Trigger**: Advance the series once per full arp cycle, or on every note step.
+- **Arp Patterns**: Up, Down, Up/Down, Down/Up, As Played, Random; adjustable gate length; chord latch.
+- **Musical Grid Locking**: Note triggers snap to the host subdivision grid, preventing beat drift when rates change or sliders move mid-performance.
+- **Stuck Note Protection**: Sounding notes are flushed on DAW cycle wraps, backward jumps, transport stop, and when the chord is released.
 
 ## Setup in Logic Pro
 1. Create a Software Instrument track in Logic Pro.
 2. In the **MIDI FX** slot of the channel strip, select **Scripter**.
 3. Open Scripter editor, paste the contents of `progressive_arp.js`, and click **Run Script**.
+4. Start Logic's transport — the arpeggiator only plays while the host is playing.

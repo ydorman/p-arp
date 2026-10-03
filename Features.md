@@ -28,7 +28,7 @@ When playing a C major chord ($C_4 - E_4 - G_4$):
 2. **Series Gauge Controls (1..8)**:
    * **Active Toggle**: Off / On per parameter (default Off = parameter uses base value).
    * **Range Sliders**: Configurable `Start (n)` and `End (n)` bounds ($1..8$).
-   * **Modulo Stage Limiter**: Wraps series values if target parameter has fewer steps (e.g. max 4 octaves).
+   * ~~**Modulo Stage Limiter**: Wraps series values if target parameter has fewer steps (e.g. max 4 octaves).~~ *(Removed: superseded by Base + Spread clamping, Feature 3)*
 3. **Advance Trigger**:
    * **Per Arp Cycle**: Advances series $n$ after completing a full chord pattern sweep.
    * **Per Note Step**: Advances series $n$ on every individual note tick.
