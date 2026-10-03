@@ -102,6 +102,11 @@ describe("series bounds", () => {
     const b = ctx.getSubdivBounds();
     assert.deepEqual([b.minVal, b.base, b.maxVal], [3, 4, 6]);
   });
+  it("pattern bounds are clamped to the menu range", () => {
+    const { ctx } = arp({ PARAM_PATTERN: PATTERN.DOWN, PARAM_PAT_SPREAD_DOWN: 3, PARAM_PAT_SPREAD_UP: 5 });
+    const b = ctx.getPatternBounds();
+    assert.deepEqual([b.minVal, b.base, b.maxVal], [PATTERN.UP, PATTERN.DOWN, PATTERN.RANDOM]);
+  });
   it("velocity steps collapse on a side with zero spread", () => {
     const { ctx } = arp({ PARAM_VEL_SPREAD_DOWN: 0, PARAM_VEL_SPREAD_UP: 10 });
     const b = ctx.getVelocityBounds();
@@ -124,6 +129,23 @@ describe("calculateVelocity", () => {
     assert.equal(ctx.calculateVelocity(4), 127);
     const low = arp({ PARAM_VEL_BASE: 10, PARAM_VEL_ACTIVE: 1, PARAM_VEL_SPREAD_DOWN: 64, PARAM_VEL_SPREAD_UP: 64 });
     assert.equal(low.ctx.calculateVelocity(-4), 1);
+  });
+});
+
+describe("calculateGate", () => {
+  it("returns the base when gate mod is off", () => {
+    const { ctx } = arp({ PARAM_GATE: 80, PARAM_GATE_ACTIVE: 0 });
+    assert.equal(ctx.calculateGate(-4), 80);
+  });
+  it("spreads 4 steps on each side of the base", () => {
+    const { ctx } = arp({ PARAM_GATE: 80, PARAM_GATE_ACTIVE: 1, PARAM_GATE_SPREAD_DOWN: 40, PARAM_GATE_SPREAD_UP: 20 });
+    const k = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+    assert.deepEqual(k.map(ctx.calculateGate), [40, 50, 60, 70, 80, 85, 90, 95, 100]);
+  });
+  it("clamps to 10..100", () => {
+    const { ctx } = arp({ PARAM_GATE: 20, PARAM_GATE_ACTIVE: 1, PARAM_GATE_SPREAD_DOWN: 40, PARAM_GATE_SPREAD_UP: 90 });
+    assert.equal(ctx.calculateGate(-4), 10);
+    assert.equal(ctx.calculateGate(4), 100);
   });
 });
 
@@ -278,6 +300,8 @@ describe("playback", () => {
       { PARAM_OCT_ACTIVE: 1, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP, PARAM_PROG_SHAPE: SHAPE.TRIANGLE },
       { PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_UP: 3, PARAM_PROG_SHAPE: SHAPE.DOWN },
       { PARAM_OCT_ACTIVE: 1, PARAM_SUB_ACTIVE: 1, PARAM_VEL_ACTIVE: 1, PARAM_PATTERN: PATTERN.RANDOM, PARAM_GATE: 100 },
+      { PARAM_PAT_ACTIVE: 1, PARAM_PAT_SPREAD_UP: 2, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP, PARAM_PROG_SHAPE: SHAPE.TRIANGLE },
+      { PARAM_PAT_ACTIVE: 1, PARAM_GATE_ACTIVE: 1, PARAM_OCT_ACTIVE: 1, PARAM_SUB_ACTIVE: 1, PARAM_GATE: 90 },
     ];
     for (const v of variants) {
       const host = arp(Object.assign({}, PLAIN, v));
@@ -333,6 +357,43 @@ describe("series modulation", () => {
     host.play(5);
     const vels = before(host.noteOns(), 6).map((n) => n.velocity);
     assert.deepEqual(vels, [45, 51, 57, 64, 70, 76, 83, 89, 95, 45]);
+  });
+
+  it("pattern alternates per arp cycle (Up shape)", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_PATTERN: PATTERN.UP,
+      PARAM_PAT_ACTIVE: 1,
+      PARAM_PAT_SPREAD_DOWN: 0,
+      PARAM_PAT_SPREAD_UP: 1,
+      PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(4.5);
+    // Up | Down | Up
+    assert.deepEqual(pitches(before(host.noteOns(), 5.5)), [60, 64, 67, 67, 64, 60, 60, 64, 67]);
+  });
+
+  it("pattern mod off ignores the series and uses the Arp Pattern menu", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_PATTERN: PATTERN.DOWN, PARAM_PAT_ACTIVE: 0 }));
+    host.ctx.currentPatternN = PATTERN.UP;
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    assert.deepEqual(pitches(host.ctx.sequenceNotes), [67, 64, 60]);
+  });
+
+  it("gate length walks its 9 steps per note (Up shape)", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_GATE: 80,
+      PARAM_GATE_ACTIVE: 1,
+      PARAM_GATE_SPREAD_DOWN: 40,
+      PARAM_GATE_SPREAD_UP: 20,
+      PARAM_ADVANCE_TRIGGER: TRIGGER.STEP,
+      PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    host.noteOn(60);
+    host.play(5);
+    const lengths = pairNotes(host.events).pairs.filter((p) => p.on < 5.75).map((p) => +(p.off - p.on).toFixed(6));
+    // 1/8 step (0.5 beats) x [40, 50, 60, 70, 80, 85, 90, 95, 100, 40] %
+    assert.deepEqual(lengths, [0.2, 0.25, 0.3, 0.35, 0.4, 0.425, 0.45, 0.475, 0.5, 0.2]);
   });
 
   it("triangle starts at the base and bounces", () => {

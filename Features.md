@@ -42,14 +42,14 @@ When playing a C major chord ($C_4 - E_4 - G_4$):
 
 ## 2. Additional Features & Roadmap
 
-1. **Progression over pattern as target**: Modulates the arp pattern sequence across the series.
-2. **Progression over gate length as target**: Modulates gate length (staccato $\to$ legato).
-3. **Base as centerpoint of series**: `Base` serves as the primary musical center (Base Octave, Base Subdivision, Velocity Base), while `Spread (-)` and `Spread (+)` define how far below and above the base the series modulates. Moving the Base dynamically shifts the entire series range while keeping relative modulation intact. *(Status: Implemented)*
+1. ✅ **Progression over pattern as target**: Modulates the arp pattern sequence across the series. The `Arp Pattern` menu is the base, and `Spread (-)` / `Spread (+)` select neighbouring patterns in menu order (Up, Down, Up/Down, Down/Up, As Played, Random). *(Status: Implemented)*
+2. ✅ **Progression over gate length as target**: Modulates gate length (staccato $\to$ legato). `Gate Length` is the base; like velocity, the series has 4 steps on each side and the spread sets the % distance covered (clamped to 10–100%). *(Status: Implemented)*
+3. ✅ **Base as centerpoint of series**: `Base` serves as the primary musical center (Arp Pattern, Base Octave, Base Subdivision, Gate Length, Velocity Base), while `Spread (-)` and `Spread (+)` define how far below and above the base the series modulates. Moving the Base dynamically shifts the entire series range while keeping relative modulation intact. *(Status: Implemented)*
 4. **Configurable number of steps**: User-defined step counts instead of hardcoded 1..8 range.
 5. **Humanization / Randomization**: Add subtle note length and velocity randomization independent of the series.
 6. **Linked series parameters**: A toggle/button to link and progress all active targets in lockstep.
 7. **Render output to MIDI region**: Capture/record generated arp notes directly into Logic's arrangement track.
-8. **Progression shape / pattern control**: Control how the series traverses its range:
+8. ✅ **Progression shape / pattern control**: Control how the series traverses its range:
    * `Up` (sawtooth up: min $\to$ base $\to$ max $\to$ min)
    * `Down` (sawtooth down: max $\to$ base $\to$ min $\to$ max)
    * `Up-Down` (triangle LFO: starts on base $\to$ max $\to$ base $\to$ min $\to$ base)
