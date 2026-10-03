@@ -94,58 +94,60 @@ describe("stepSeriesValue", () => {
 describe("series bounds", () => {
   it("octave bounds are clamped to 1..4", () => {
     const { ctx } = arp({ PARAM_BASE_OCTAVE: 4, PARAM_OCT_SPREAD_DOWN: 3, PARAM_OCT_SPREAD_UP: 3 });
-    const b = ctx.getOctaveBounds();
-    assert.deepEqual([b.minVal, b.base, b.maxVal], [1, 4, 4]);
+    const b = ctx.getSeriesBounds("octave");
+    assert.deepEqual([b.minPos, b.basePos, b.maxPos], [1, 4, 4]);
   });
   it("subdivision bounds are clamped to n=1..6", () => {
     const { ctx } = arp({ PARAM_BASE_SUBDIV: SUBDIV.SIXTEENTH, PARAM_SUB_SPREAD_DOWN: 1, PARAM_SUB_SPREAD_UP: 3 });
-    const b = ctx.getSubdivBounds();
-    assert.deepEqual([b.minVal, b.base, b.maxVal], [3, 4, 6]);
+    const b = ctx.getSeriesBounds("subdiv");
+    assert.deepEqual([b.minPos, b.basePos, b.maxPos], [3, 4, 6]);
   });
   it("pattern bounds are clamped to the menu range", () => {
     const { ctx } = arp({ PARAM_PATTERN: PATTERN.DOWN, PARAM_PAT_SPREAD_DOWN: 3, PARAM_PAT_SPREAD_UP: 5 });
-    const b = ctx.getPatternBounds();
-    assert.deepEqual([b.minVal, b.base, b.maxVal], [PATTERN.UP, PATTERN.DOWN, PATTERN.RANDOM]);
+    const b = ctx.getSeriesBounds("pattern");
+    assert.deepEqual([b.minPos, b.basePos, b.maxPos], [PATTERN.UP, PATTERN.DOWN, PATTERN.RANDOM]);
   });
   it("velocity steps collapse on a side with zero spread", () => {
     const { ctx } = arp({ PARAM_VEL_SPREAD_DOWN: 0, PARAM_VEL_SPREAD_UP: 10 });
-    const b = ctx.getVelocityBounds();
-    assert.deepEqual([b.minK, b.maxK], [0, 4]);
+    const b = ctx.getSeriesBounds("velocity");
+    assert.deepEqual([b.minPos, b.maxPos], [0, 4]);
   });
 });
 
-describe("calculateVelocity", () => {
+describe("velocity series values", () => {
   it("returns the base when velocity mod is off", () => {
     const { ctx } = arp({ PARAM_VEL_BASE: 70, PARAM_VEL_ACTIVE: 0 });
-    assert.equal(ctx.calculateVelocity(4), 70);
+    ctx.seriesState.velocity.pos = 4;
+    assert.equal(ctx.getSeriesValue("velocity"), 70);
   });
   it("spreads 4 steps on each side of the base", () => {
     const { ctx } = arp({ PARAM_VEL_BASE: 70, PARAM_VEL_ACTIVE: 1, PARAM_VEL_SPREAD_DOWN: 25, PARAM_VEL_SPREAD_UP: 25 });
     const k = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
-    assert.deepEqual(k.map(ctx.calculateVelocity), [45, 51, 57, 64, 70, 76, 83, 89, 95]);
+    assert.deepEqual(k.map((pos) => ctx.getSeriesValueAt("velocity", pos)), [45, 51, 57, 64, 70, 76, 83, 89, 95]);
   });
   it("clamps to 1..127", () => {
     const { ctx } = arp({ PARAM_VEL_BASE: 120, PARAM_VEL_ACTIVE: 1, PARAM_VEL_SPREAD_DOWN: 64, PARAM_VEL_SPREAD_UP: 64 });
-    assert.equal(ctx.calculateVelocity(4), 127);
+    assert.equal(ctx.getSeriesValueAt("velocity", 4), 127);
     const low = arp({ PARAM_VEL_BASE: 10, PARAM_VEL_ACTIVE: 1, PARAM_VEL_SPREAD_DOWN: 64, PARAM_VEL_SPREAD_UP: 64 });
-    assert.equal(low.ctx.calculateVelocity(-4), 1);
+    assert.equal(low.ctx.getSeriesValueAt("velocity", -4), 1);
   });
 });
 
-describe("calculateGate", () => {
+describe("gate series values", () => {
   it("returns the base when gate mod is off", () => {
     const { ctx } = arp({ PARAM_GATE: 80, PARAM_GATE_ACTIVE: 0 });
-    assert.equal(ctx.calculateGate(-4), 80);
+    ctx.seriesState.gate.pos = -4;
+    assert.equal(ctx.getSeriesValue("gate"), 80);
   });
   it("spreads 4 steps on each side of the base", () => {
     const { ctx } = arp({ PARAM_GATE: 80, PARAM_GATE_ACTIVE: 1, PARAM_GATE_SPREAD_DOWN: 40, PARAM_GATE_SPREAD_UP: 20 });
     const k = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
-    assert.deepEqual(k.map(ctx.calculateGate), [40, 50, 60, 70, 80, 85, 90, 95, 100]);
+    assert.deepEqual(k.map((pos) => ctx.getSeriesValueAt("gate", pos)), [40, 50, 60, 70, 80, 85, 90, 95, 100]);
   });
   it("clamps to 10..100", () => {
     const { ctx } = arp({ PARAM_GATE: 20, PARAM_GATE_ACTIVE: 1, PARAM_GATE_SPREAD_DOWN: 40, PARAM_GATE_SPREAD_UP: 90 });
-    assert.equal(ctx.calculateGate(-4), 10);
-    assert.equal(ctx.calculateGate(4), 100);
+    assert.equal(ctx.getSeriesValueAt("gate", -4), 10);
+    assert.equal(ctx.getSeriesValueAt("gate", 4), 100);
   });
 });
 
@@ -375,7 +377,7 @@ describe("series modulation", () => {
 
   it("pattern mod off ignores the series and uses the Arp Pattern menu", () => {
     const host = arp(Object.assign({}, PLAIN, { PARAM_PATTERN: PATTERN.DOWN, PARAM_PAT_ACTIVE: 0 }));
-    host.ctx.currentPatternN = PATTERN.UP;
+    host.ctx.seriesState.pattern.pos = PATTERN.UP;
     [60, 64, 67].forEach((p) => host.noteOn(p));
     assert.deepEqual(pitches(host.ctx.sequenceNotes), [67, 64, 60]);
   });
@@ -405,10 +407,10 @@ describe("series modulation", () => {
       PARAM_ADVANCE_TRIGGER: TRIGGER.STEP,
       PARAM_PROG_SHAPE: SHAPE.TRIANGLE,
     }));
-    const seen = [host.ctx.currentOctaveN];
+    const seen = [host.ctx.seriesState.octave.pos];
     for (let i = 0; i < 5; i++) {
       host.ctx.advanceProgressions();
-      seen.push(host.ctx.currentOctaveN);
+      seen.push(host.ctx.seriesState.octave.pos);
     }
     assert.deepEqual(seen, [2, 3, 2, 1, 2, 3]);
   });
@@ -422,10 +424,10 @@ describe("series modulation", () => {
       PARAM_PROG_SHAPE: SHAPE.TRIANGLE,
     }));
     host.setParam(host.ctx.PARAM_OCT_ACTIVE, 1);
-    const seen = [host.ctx.currentOctaveN];
+    const seen = [host.ctx.seriesState.octave.pos];
     for (let i = 0; i < 3; i++) {
       host.ctx.advanceProgressions();
-      seen.push(host.ctx.currentOctaveN);
+      seen.push(host.ctx.seriesState.octave.pos);
     }
     assert.deepEqual(seen, [4, 3, 4, 3]);
   });
@@ -440,8 +442,8 @@ describe("series modulation", () => {
     }));
     host.ctx.advanceProgressions();
     host.ctx.advanceProgressions();
-    assert.equal(host.ctx.currentOctaveN, 3);
+    assert.equal(host.ctx.seriesState.octave.pos, 3);
     host.setParam(host.ctx.PARAM_BASE_OCTAVE, 3);
-    assert.equal(host.ctx.currentOctaveN, 2);
+    assert.equal(host.ctx.seriesState.octave.pos, 2);
   });
 });

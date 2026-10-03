@@ -228,21 +228,54 @@ var wasPlaying = false;
 var lastBlockStartBeat = -1;   // Track previous block to detect loop wraps
 var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNoteOffBeat }
 
-// Series counters & direction state (for Up-Down / Triangle bounce)
-var currentPatternN = 2;       // Arp Pattern menu index 0..5
-var patternDir = 1;
+// ----------------------------------------------------------------------------
+// SERIES DEFINITIONS
+// ----------------------------------------------------------------------------
+// Each modulation target is described once here; all series logic below is generic.
+//
+// kind "range":  the series walks whole values from (base - spreadDown) to (base + spreadUp),
+//                clamped to [minValue, maxValue]. Position = the value itself.
+// kind "scaled": the series walks steps k = -SCALED_STEPS..+SCALED_STEPS around the base;
+//                spreadDown / spreadUp set the total distance covered on each side.
+//                Position = k (0 is exactly the base). A side with zero spread has no steps.
+//
+// baseOffset converts the base parameter to a series value (e.g. subdivision menu index -> n).
+var SCALED_STEPS = 4;
 
-var currentOctaveN = 1;
-var octaveDir = 1;
+var SERIES = {
+  pattern: {
+    kind: "range", baseParam: PARAM_PATTERN, baseOffset: 0, activeParam: PARAM_PAT_ACTIVE,
+    spreadDownParam: PARAM_PAT_SPREAD_DOWN, spreadUpParam: PARAM_PAT_SPREAD_UP,
+    minValue: 0, maxValue: 5 // Arp Pattern menu indices
+  },
+  octave: {
+    kind: "range", baseParam: PARAM_BASE_OCTAVE, baseOffset: 0, activeParam: PARAM_OCT_ACTIVE,
+    spreadDownParam: PARAM_OCT_SPREAD_DOWN, spreadUpParam: PARAM_OCT_SPREAD_UP,
+    minValue: 1, maxValue: 4 // octaves
+  },
+  subdiv: {
+    kind: "range", baseParam: PARAM_BASE_SUBDIV, baseOffset: 1, activeParam: PARAM_SUB_ACTIVE,
+    spreadDownParam: PARAM_SUB_SPREAD_DOWN, spreadUpParam: PARAM_SUB_SPREAD_UP,
+    minValue: 1, maxValue: 6 // n in 2^n (menu index 0 is 1/2, n=1)
+  },
+  gate: {
+    kind: "scaled", baseParam: PARAM_GATE, baseOffset: 0, activeParam: PARAM_GATE_ACTIVE,
+    spreadDownParam: PARAM_GATE_SPREAD_DOWN, spreadUpParam: PARAM_GATE_SPREAD_UP,
+    minValue: 10, maxValue: 100 // gate %
+  },
+  velocity: {
+    kind: "scaled", baseParam: PARAM_VEL_BASE, baseOffset: 0, activeParam: PARAM_VEL_ACTIVE,
+    spreadDownParam: PARAM_VEL_SPREAD_DOWN, spreadUpParam: PARAM_VEL_SPREAD_UP,
+    minValue: 1, maxValue: 127 // MIDI velocity
+  }
+};
+var SERIES_NAMES = ["pattern", "octave", "subdiv", "gate", "velocity"];
 
-var currentSubdivN = 3;
-var subdivDir = 1;
-
-var currentGateStep = 0;       // -4 to +4 (0 is exact base)
-var gateDir = 1;
-
-var currentVelocityStep = 0;   // -4 to +4 (0 is exact base)
-var velocityDir = 1;
+// Series state (for Up-Down / Triangle bounce): { name: { pos, dir } }
+var seriesState = {};
+for (var si = 0; si < SERIES_NAMES.length; si++) {
+  seriesState[SERIES_NAMES[si]] = { pos: 0, dir: 1 };
+}
 
 // ----------------------------------------------------------------------------
 // HELPER FUNCTIONS
@@ -303,96 +336,56 @@ function quantizeBeatToGrid(beat, stepDuration) {
   return 1.0 + (Math.ceil(ticks) * stepDuration);
 }
 
-// Calculate velocity given step k (-4..+4) around Velocity Base
-function calculateVelocity(k) {
-  var base = GetParameter(PARAM_VEL_BASE);
-  if (!GetParameter(PARAM_VEL_ACTIVE)) {
-    return base;
+function isSeriesActive(name) {
+  return !!GetParameter(SERIES[name].activeParam);
+}
+
+function getSeriesBase(name) {
+  return GetParameter(SERIES[name].baseParam) + SERIES[name].baseOffset;
+}
+
+// Position bounds of a series around its base: { minPos, basePos, maxPos }
+function getSeriesBounds(name) {
+  var def = SERIES[name];
+  var spreadDown = GetParameter(def.spreadDownParam);
+  var spreadUp = GetParameter(def.spreadUpParam);
+  if (def.kind === "scaled") {
+    return {
+      minPos: (spreadDown > 0) ? -SCALED_STEPS : 0,
+      basePos: 0,
+      maxPos: (spreadUp > 0) ? SCALED_STEPS : 0
+    };
   }
-  var spreadDown = GetParameter(PARAM_VEL_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_VEL_SPREAD_UP);
+  var base = getSeriesBase(name);
+  return {
+    minPos: Math.max(def.minValue, base - spreadDown),
+    basePos: base,
+    maxPos: Math.min(def.maxValue, base + spreadUp)
+  };
+}
 
-  var vel = base;
-  if (k < 0) {
-    vel = base - Math.round((spreadDown * Math.abs(k)) / 4.0);
-  } else if (k > 0) {
-    vel = base + Math.round((spreadUp * k) / 4.0);
+// Parameter value at a given series position
+function getSeriesValueAt(name, pos) {
+  var def = SERIES[name];
+  if (def.kind === "range") {
+    return pos;
   }
-  return Math.min(127, Math.max(1, vel));
-}
-
-// Calculate gate length (%) given step k (-4..+4) around the Gate Length base
-function calculateGate(k) {
-  var base = GetParameter(PARAM_GATE);
-  if (!GetParameter(PARAM_GATE_ACTIVE)) {
-    return base;
+  var base = getSeriesBase(name);
+  var value = base;
+  if (pos < 0) {
+    value = base - Math.round((GetParameter(def.spreadDownParam) * Math.abs(pos)) / SCALED_STEPS);
+  } else if (pos > 0) {
+    value = base + Math.round((GetParameter(def.spreadUpParam) * pos) / SCALED_STEPS);
   }
-  var spreadDown = GetParameter(PARAM_GATE_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_GATE_SPREAD_UP);
+  return Math.min(def.maxValue, Math.max(def.minValue, value));
+}
 
-  var gate = base;
-  if (k < 0) {
-    gate = base - Math.round((spreadDown * Math.abs(k)) / 4.0);
-  } else if (k > 0) {
-    gate = base + Math.round((spreadUp * k) / 4.0);
+// Parameter value currently in effect (the base when the series is not active)
+function getSeriesValue(name) {
+  if (!isSeriesActive(name)) {
+    return getSeriesBase(name);
   }
-  return Math.min(100, Math.max(10, gate));
-}
-
-// Arp pattern currently in effect (series value when Pattern Mod is active)
-function getCurrentPattern() {
-  if (GetParameter(PARAM_PAT_ACTIVE)) {
-    return currentPatternN;
-  }
-  return GetParameter(PARAM_PATTERN);
-}
-
-// Compute dynamic Pattern bounds around the Arp Pattern menu (in menu order)
-function getPatternBounds() {
-  var base = GetParameter(PARAM_PATTERN);
-  var spreadDown = GetParameter(PARAM_PAT_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_PAT_SPREAD_UP);
-  var minVal = Math.max(0, base - spreadDown);
-  var maxVal = Math.min(5, base + spreadUp);
-  return { base: base, minVal: minVal, maxVal: maxVal };
-}
-
-// Compute dynamic Octave bounds around Base Octave
-function getOctaveBounds() {
-  var base = GetParameter(PARAM_BASE_OCTAVE);
-  var spreadDown = GetParameter(PARAM_OCT_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_OCT_SPREAD_UP);
-  var minVal = Math.max(1, base - spreadDown);
-  var maxVal = Math.min(4, base + spreadUp);
-  return { base: base, minVal: minVal, maxVal: maxVal };
-}
-
-// Compute dynamic Subdivision bounds around Base Subdivision
-function getSubdivBounds() {
-  var base = GetParameter(PARAM_BASE_SUBDIV) + 1; // 1..6
-  var spreadDown = GetParameter(PARAM_SUB_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_SUB_SPREAD_UP);
-  var minVal = Math.max(1, base - spreadDown);
-  var maxVal = Math.min(6, base + spreadUp);
-  return { base: base, minVal: minVal, maxVal: maxVal };
-}
-
-// Compute dynamic Velocity step bounds around Base Velocity
-function getVelocityBounds() {
-  var spreadDown = GetParameter(PARAM_VEL_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_VEL_SPREAD_UP);
-  var minK = (spreadDown > 0) ? -4 : 0;
-  var maxK = (spreadUp > 0) ? 4 : 0;
-  return { baseK: 0, minK: minK, maxK: maxK };
-}
-
-// Compute dynamic Gate step bounds around the Gate Length base
-function getGateBounds() {
-  var spreadDown = GetParameter(PARAM_GATE_SPREAD_DOWN);
-  var spreadUp = GetParameter(PARAM_GATE_SPREAD_UP);
-  var minK = (spreadDown > 0) ? -4 : 0;
-  var maxK = (spreadUp > 0) ? 4 : 0;
-  return { baseK: 0, minK: minK, maxK: maxK };
+  return getSeriesValueAt(name, seriesState[name].pos);
 }
 
 // Step a series value across [minVal, maxVal] according to shape:
@@ -458,118 +451,32 @@ function getSeriesStart(shape, minVal, base, maxVal) {
   return { val: base, dir: (base < maxVal) ? 1 : -1 };
 }
 
-function resetPatternSeries(shape) {
-  var pat = getPatternBounds();
-  var start = getSeriesStart(shape, pat.minVal, pat.base, pat.maxVal);
-  currentPatternN = start.val;
-  patternDir = start.dir;
-}
-
-function resetOctaveSeries(shape) {
-  var oct = getOctaveBounds();
-  var start = getSeriesStart(shape, oct.minVal, oct.base, oct.maxVal);
-  currentOctaveN = start.val;
-  octaveDir = start.dir;
-}
-
-function resetSubdivSeries(shape) {
-  var sub = getSubdivBounds();
-  var start = getSeriesStart(shape, sub.minVal, sub.base, sub.maxVal);
-  currentSubdivN = start.val;
-  subdivDir = start.dir;
-}
-
-function resetGateSeries(shape) {
-  var gate = getGateBounds();
-  var start = getSeriesStart(shape, gate.minK, gate.baseK, gate.maxK);
-  currentGateStep = start.val;
-  gateDir = start.dir;
-}
-
-function resetVelocitySeries(shape) {
-  var vel = getVelocityBounds();
-  var start = getSeriesStart(shape, vel.minK, vel.baseK, vel.maxK);
-  currentVelocityStep = start.val;
-  velocityDir = start.dir;
+function resetSeries(name, shape) {
+  var b = getSeriesBounds(name);
+  var start = getSeriesStart(shape, b.minPos, b.basePos, b.maxPos);
+  seriesState[name].pos = start.val;
+  seriesState[name].dir = start.dir;
 }
 
 // Reset series counters and directions based on chosen shape and ranges around Base
 function resetSeriesState() {
   var shape = GetParameter(PARAM_PROG_SHAPE);
-  resetPatternSeries(shape);
-  resetOctaveSeries(shape);
-  resetSubdivSeries(shape);
-  resetGateSeries(shape);
-  resetVelocitySeries(shape);
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    resetSeries(SERIES_NAMES[i], shape);
+  }
 }
 
 // Advance series for all active modulations
 function advanceProgressions() {
   var shape = GetParameter(PARAM_PROG_SHAPE);
-
-  if (GetParameter(PARAM_PAT_ACTIVE)) {
-    var pat = getPatternBounds();
-    var patResult = stepSeriesValue(
-      currentPatternN,
-      patternDir,
-      pat.minVal,
-      pat.maxVal,
-      shape
-    );
-    currentPatternN = patResult.val;
-    patternDir = patResult.dir;
-  }
-
-  if (GetParameter(PARAM_OCT_ACTIVE)) {
-    var oct = getOctaveBounds();
-    var octResult = stepSeriesValue(
-      currentOctaveN,
-      octaveDir,
-      oct.minVal,
-      oct.maxVal,
-      shape
-    );
-    currentOctaveN = octResult.val;
-    octaveDir = octResult.dir;
-  }
-
-  if (GetParameter(PARAM_SUB_ACTIVE)) {
-    var sub = getSubdivBounds();
-    var subResult = stepSeriesValue(
-      currentSubdivN,
-      subdivDir,
-      sub.minVal,
-      sub.maxVal,
-      shape
-    );
-    currentSubdivN = subResult.val;
-    subdivDir = subResult.dir;
-  }
-
-  if (GetParameter(PARAM_GATE_ACTIVE)) {
-    var gate = getGateBounds();
-    var gateResult = stepSeriesValue(
-      currentGateStep,
-      gateDir,
-      gate.minK,
-      gate.maxK,
-      shape
-    );
-    currentGateStep = gateResult.val;
-    gateDir = gateResult.dir;
-  }
-
-  if (GetParameter(PARAM_VEL_ACTIVE)) {
-    var vel = getVelocityBounds();
-    var velResult = stepSeriesValue(
-      currentVelocityStep,
-      velocityDir,
-      vel.minK,
-      vel.maxK,
-      shape
-    );
-    currentVelocityStep = velResult.val;
-    velocityDir = velResult.dir;
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    var name = SERIES_NAMES[i];
+    if (!isSeriesActive(name)) continue;
+    var b = getSeriesBounds(name);
+    var state = seriesState[name];
+    var result = stepSeriesValue(state.pos, state.dir, b.minPos, b.maxPos, shape);
+    state.pos = result.val;
+    state.dir = result.dir;
   }
 }
 
@@ -583,13 +490,10 @@ function rebuildSequence() {
   }
 
   // Determine current octave count
-  var octaves = GetParameter(PARAM_BASE_OCTAVE);
-  if (GetParameter(PARAM_OCT_ACTIVE)) {
-    octaves = currentOctaveN;
-  }
+  var octaves = getSeriesValue("octave");
 
   // Sort notes by pitch for standard patterns
-  var pattern = getCurrentPattern();
+  var pattern = getSeriesValue("pattern");
   if (pattern !== 4) { // Not "As Played"
     baseNotes.sort(function(a, b) { return a.pitch - b.pitch; });
   }
@@ -734,7 +638,7 @@ function ProcessMIDI() {
     currentStepIndex = 0;
     rebuildSequence();
     
-    var initialSubdivN = GetParameter(PARAM_SUB_ACTIVE) ? currentSubdivN : (GetParameter(PARAM_BASE_SUBDIV) + 1);
+    var initialSubdivN = getSeriesValue("subdiv");
     nextBeatToSchedule = quantizeBeatToGrid(info.blockStartBeat, getSubdivisionBeatLength(initialSubdivN));
   }
   
@@ -751,7 +655,7 @@ function ProcessMIDI() {
   // 3. Detect DAW Loop Wrap or Backward Jump (e.g. 8-bar loop cycling)
   if (lastBlockStartBeat >= 0 && info.blockStartBeat < lastBlockStartBeat) {
     stopAllSoundingNotes();
-    var wrapSubdivN = GetParameter(PARAM_SUB_ACTIVE) ? currentSubdivN : (GetParameter(PARAM_BASE_SUBDIV) + 1);
+    var wrapSubdivN = getSeriesValue("subdiv");
     nextBeatToSchedule = quantizeBeatToGrid(info.blockStartBeat, getSubdivisionBeatLength(wrapSubdivN));
   }
   lastBlockStartBeat = info.blockStartBeat;
@@ -767,7 +671,7 @@ function ProcessMIDI() {
 
   // 4. Catch up if transport jumped forward or got out of range
   if (nextBeatToSchedule < info.blockStartBeat || nextBeatToSchedule > info.blockEndBeat + 4.0) {
-    var catchSubdivN = GetParameter(PARAM_SUB_ACTIVE) ? currentSubdivN : (GetParameter(PARAM_BASE_SUBDIV) + 1);
+    var catchSubdivN = getSeriesValue("subdiv");
     nextBeatToSchedule = quantizeBeatToGrid(info.blockStartBeat, getSubdivisionBeatLength(catchSubdivN));
   }
 
@@ -776,10 +680,7 @@ function ProcessMIDI() {
     if (sequenceNotes.length === 0) break;
 
     // A. Calculate subdivision duration for this step
-    var subdivN = (GetParameter(PARAM_BASE_SUBDIV) + 1); // menu index 0 is 1/2 (n=1)
-    if (GetParameter(PARAM_SUB_ACTIVE)) {
-      subdivN = currentSubdivN;
-    }
+    var subdivN = getSeriesValue("subdiv");
     var stepBeatDuration = getSubdivisionBeatLength(subdivN);
 
     // CRITICAL: Ensure nextBeatToSchedule is locked to this subdivision's musical grid!
@@ -790,7 +691,7 @@ function ProcessMIDI() {
     }
 
     // B. Select note
-    var pattern = getCurrentPattern();
+    var pattern = getSeriesValue("pattern");
     var noteData;
     if (pattern === 5) { // Random
       var randIdx = Math.floor(Math.random() * sequenceNotes.length);
@@ -801,12 +702,12 @@ function ProcessMIDI() {
 
     // C. Calculate velocity
     var velocity = noteData.velocity;
-    if (GetParameter(PARAM_VEL_ACTIVE)) {
-      velocity = calculateVelocity(currentVelocityStep);
+    if (isSeriesActive("velocity")) {
+      velocity = getSeriesValue("velocity");
     }
 
     // D. Calculate Gate & Note-Off Beat
-    var gate = calculateGate(currentGateStep) / 100.0;
+    var gate = getSeriesValue("gate") / 100.0;
     var noteLengthBeats = stepBeatDuration * gate;
     var noteOffBeat = nextBeatToSchedule + noteLengthBeats;
 
@@ -861,34 +762,16 @@ function ProcessMIDI() {
 function ParameterChanged(param, value) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
 
-  // Pattern bounds around Arp Pattern
-  var pat = getPatternBounds();
-  if (currentPatternN < pat.minVal || currentPatternN > pat.maxVal || param === PARAM_PAT_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_PATTERN) {
-    resetPatternSeries(shape);
-  }
-
-  // Octave bounds around Base Octave
-  var oct = getOctaveBounds();
-  if (currentOctaveN < oct.minVal || currentOctaveN > oct.maxVal || param === PARAM_OCT_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_BASE_OCTAVE) {
-    resetOctaveSeries(shape);
-  }
-
-  // Subdivision bounds around Base Subdivision
-  var sub = getSubdivBounds();
-  if (currentSubdivN < sub.minVal || currentSubdivN > sub.maxVal || param === PARAM_SUB_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_BASE_SUBDIV) {
-    resetSubdivSeries(shape);
-  }
-
-  // Gate bounds around Gate Length base
-  var gate = getGateBounds();
-  if (currentGateStep < gate.minK || currentGateStep > gate.maxK || param === PARAM_GATE_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_GATE) {
-    resetGateSeries(shape);
-  }
-
-  // Velocity bounds around Base Velocity
-  var vel = getVelocityBounds();
-  if (currentVelocityStep < vel.minK || currentVelocityStep > vel.maxK || param === PARAM_VEL_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_VEL_BASE) {
-    resetVelocitySeries(shape);
+  // Restart a series when its position falls outside its bounds, or when its
+  // base, active toggle, or the progression shape changes
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    var name = SERIES_NAMES[i];
+    var def = SERIES[name];
+    var b = getSeriesBounds(name);
+    var pos = seriesState[name].pos;
+    if (pos < b.minPos || pos > b.maxPos || param === def.activeParam || param === def.baseParam || param === PARAM_PROG_SHAPE) {
+      resetSeries(name, shape);
+    }
   }
 
   rebuildSequence();
