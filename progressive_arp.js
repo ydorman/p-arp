@@ -19,20 +19,6 @@ var PluginParameters = [
     defaultValue: 2 // Up/Down
   },
   {
-    name: "Base Octave Range",
-    type: "lin",
-    minValue: 1,
-    maxValue: 4,
-    numberOfSteps: 3,
-    defaultValue: 1
-  },
-  {
-    name: "Base Subdivision",
-    type: "menu",
-    valueStrings: ["1/2 (n=1)", "1/4 (n=2)", "1/8 (n=3)", "1/16 (n=4)", "1/32 (n=5)", "1/64 (n=6)"],
-    defaultValue: 2 // 1/8 (n=3)
-  },
-  {
     name: "Gate Length (%)",
     type: "lin",
     minValue: 10,
@@ -60,6 +46,14 @@ var PluginParameters = [
   },
 
   // --- OCTAVE SERIES GAUGE ---
+  {
+    name: "Base Octave Range",
+    type: "lin",
+    minValue: 1,
+    maxValue: 4,
+    numberOfSteps: 3,
+    defaultValue: 2
+  },
   {
     name: "Octave Mod Active",
     type: "checkbox",
@@ -92,6 +86,12 @@ var PluginParameters = [
 
   // --- SUBDIVISION SERIES GAUGE ---
   {
+    name: "Base Subdivision",
+    type: "menu",
+    valueStrings: ["1/2 (n=1)", "1/4 (n=2)", "1/8 (n=3)", "1/16 (n=4)", "1/32 (n=5)", "1/64 (n=6)"],
+    defaultValue: 2 // 1/8 (n=3)
+  },
+  {
     name: "Subdiv Mod Active",
     type: "checkbox",
     defaultValue: 0
@@ -115,17 +115,17 @@ var PluginParameters = [
 
   // --- VELOCITY SERIES GAUGE ---
   {
-    name: "Velocity Mod Active",
-    type: "checkbox",
-    defaultValue: 0
-  },
-  {
     name: "Velocity Base",
     type: "lin",
     minValue: 1,
     maxValue: 127,
     numberOfSteps: 126,
     defaultValue: 70
+  },
+  {
+    name: "Velocity Mod Active",
+    type: "checkbox",
+    defaultValue: 0
   },
   {
     name: "Velocity Spread (-) Down",
@@ -147,24 +147,24 @@ var PluginParameters = [
 
 // Parameter indices
 var PARAM_PATTERN = 0;
-var PARAM_BASE_OCTAVE = 1;
-var PARAM_BASE_SUBDIV = 2;
-var PARAM_GATE = 3;
-var PARAM_LATCH = 4;
-var PARAM_ADVANCE_TRIGGER = 5;
-var PARAM_PROG_SHAPE = 6;
+var PARAM_GATE = 1;
+var PARAM_LATCH = 2;
+var PARAM_ADVANCE_TRIGGER = 3;
+var PARAM_PROG_SHAPE = 4;
 
-var PARAM_OCT_ACTIVE = 7;
-var PARAM_OCT_SPREAD_DOWN = 8;
-var PARAM_OCT_SPREAD_UP = 9;
-var PARAM_OCT_MAX = 10;
+var PARAM_BASE_OCTAVE = 5;
+var PARAM_OCT_ACTIVE = 6;
+var PARAM_OCT_SPREAD_DOWN = 7;
+var PARAM_OCT_SPREAD_UP = 8;
+var PARAM_OCT_MAX = 9;
 
+var PARAM_BASE_SUBDIV = 10;
 var PARAM_SUB_ACTIVE = 11;
 var PARAM_SUB_SPREAD_DOWN = 12;
 var PARAM_SUB_SPREAD_UP = 13;
 
-var PARAM_VEL_ACTIVE = 14;
-var PARAM_VEL_BASE = 15;
+var PARAM_VEL_BASE = 14;
+var PARAM_VEL_ACTIVE = 15;
 var PARAM_VEL_SPREAD_DOWN = 16;
 var PARAM_VEL_SPREAD_UP = 17;
 
