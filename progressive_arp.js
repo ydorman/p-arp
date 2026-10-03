@@ -240,13 +240,16 @@ var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNot
 //                Position = k (0 is exactly the base). A side with zero spread has no steps.
 //
 // baseOffset converts the base parameter to a series value (e.g. subdivision menu index -> n).
+// cycleOnly series advance only at the end of an arp cycle, even when Advance Trigger is
+// "Per Note Step" (switching patterns on every note just scrambles them).
 var SCALED_STEPS = 4;
 
 var SERIES = {
   pattern: {
     kind: "range", baseParam: PARAM_PATTERN, baseOffset: 0, activeParam: PARAM_PAT_ACTIVE,
     spreadDownParam: PARAM_PAT_SPREAD_DOWN, spreadUpParam: PARAM_PAT_SPREAD_UP,
-    minValue: 0, maxValue: 5 // Arp Pattern menu indices
+    minValue: 0, maxValue: 5, // Arp Pattern menu indices
+    cycleOnly: true
   },
   octave: {
     kind: "range", baseParam: PARAM_BASE_OCTAVE, baseOffset: 0, activeParam: PARAM_OCT_ACTIVE,
@@ -466,12 +469,14 @@ function resetSeriesState() {
   }
 }
 
-// Advance series for all active modulations
-function advanceProgressions() {
+// Advance series for all active modulations.
+// isCycleEnd: true when called at the end of an arp cycle (cycleOnly series advance only then)
+function advanceProgressions(isCycleEnd) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
   for (var i = 0; i < SERIES_NAMES.length; i++) {
     var name = SERIES_NAMES[i];
     if (!isSeriesActive(name)) continue;
+    if (SERIES[name].cycleOnly && !isCycleEnd) continue;
     var b = getSeriesBounds(name);
     var state = seriesState[name];
     var result = stepSeriesValue(state.pos, state.dir, b.minPos, b.maxPos, shape);
@@ -742,11 +747,8 @@ function ProcessMIDI() {
     }
 
     // G. Advance arithmetic series
-    if (advanceTrigger === 1) { // Per Note Step
-      advanceProgressions();
-      rebuildSequence();
-    } else if (isCycleEnd) {     // Per Arp Cycle
-      advanceProgressions();
+    if (advanceTrigger === 1 || isCycleEnd) { // Per Note Step, or Per Arp Cycle at cycle end
+      advanceProgressions(isCycleEnd);
       rebuildSequence();
     }
 

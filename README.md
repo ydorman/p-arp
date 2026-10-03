@@ -21,7 +21,7 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - `Up` (sawtooth: min → max, then jump back to min)
   - `Down` (sawtooth: max → min, then jump back to max)
   - `Up-Down (Triangle)` (starts at base → max → min → base …)
-- **Advance Trigger**: Advance the series once per full arp cycle, or on every note step.
+- **Advance Trigger**: Advance the series once per full arp cycle, or on every note step. The Pattern series always advances per arp cycle (switching patterns on every note just scrambles them).
 - **Arp Patterns**: Up, Down, Up/Down, Down/Up, As Played, Random; chord latch.
 - **Musical Grid Locking**: Note triggers snap to the host subdivision grid, preventing beat drift when rates change or sliders move mid-performance.
 - **Stuck Note Protection**: Sounding notes are flushed on DAW cycle wraps, backward jumps, transport stop, and when the chord is released.

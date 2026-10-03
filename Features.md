@@ -42,7 +42,7 @@ When playing a C major chord ($C_4 - E_4 - G_4$):
 
 ## 2. Additional Features & Roadmap
 
-1. ✅ **Progression over pattern as target**: Modulates the arp pattern sequence across the series. The `Arp Pattern` menu is the base, and `Spread (-)` / `Spread (+)` select neighbouring patterns in menu order (Up, Down, Up/Down, Down/Up, As Played, Random). *(Status: Implemented)*
+1. ✅ **Progression over pattern as target**: Modulates the arp pattern sequence across the series. The `Arp Pattern` menu is the base, and `Spread (-)` / `Spread (+)` select neighbouring patterns in menu order (Up, Down, Up/Down, Down/Up, As Played, Random). Always advances per arp cycle, even when Advance Trigger is "Per Note Step". *(Status: Implemented)*
 2. ✅ **Progression over gate length as target**: Modulates gate length (staccato $\to$ legato). `Gate Length` is the base; like velocity, the series has 4 steps on each side and the spread sets the % distance covered (clamped to 10–100%). *(Status: Implemented)*
 3. ✅ **Base as centerpoint of series**: `Base` serves as the primary musical center (Arp Pattern, Base Octave, Base Subdivision, Gate Length, Velocity Base), while `Spread (-)` and `Spread (+)` define how far below and above the base the series modulates. Moving the Base dynamically shifts the entire series range while keeping relative modulation intact. *(Status: Implemented)*
 4. **Configurable number of steps**: User-defined step counts instead of hardcoded 1..8 range.

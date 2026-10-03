@@ -375,6 +375,25 @@ describe("series modulation", () => {
     assert.deepEqual(pitches(before(host.noteOns(), 5.5)), [60, 64, 67, 67, 64, 60, 60, 64, 67]);
   });
 
+  it("pattern advances only at cycle end even with Per Note Step", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_PATTERN: PATTERN.UP,
+      PARAM_PAT_ACTIVE: 1,
+      PARAM_PAT_SPREAD_DOWN: 0,
+      PARAM_PAT_SPREAD_UP: 1,
+      PARAM_VEL_ACTIVE: 1,
+      PARAM_ADVANCE_TRIGGER: TRIGGER.STEP,
+      PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(4.5);
+    const ons = before(host.noteOns(), 5.5);
+    // Pattern still switches per cycle: Up | Down | Up
+    assert.deepEqual(pitches(ons), [60, 64, 67, 67, 64, 60, 60, 64, 67]);
+    // ...while velocity keeps advancing on every note
+    assert.deepEqual(ons.map((n) => n.velocity), [45, 51, 57, 64, 70, 76, 83, 89, 95]);
+  });
+
   it("pattern mod off ignores the series and uses the Arp Pattern menu", () => {
     const host = arp(Object.assign({}, PLAIN, { PARAM_PATTERN: PATTERN.DOWN, PARAM_PAT_ACTIVE: 0 }));
     host.ctx.seriesState.pattern.pos = PATTERN.UP;
@@ -409,7 +428,7 @@ describe("series modulation", () => {
     }));
     const seen = [host.ctx.seriesState.octave.pos];
     for (let i = 0; i < 5; i++) {
-      host.ctx.advanceProgressions();
+      host.ctx.advanceProgressions(true);
       seen.push(host.ctx.seriesState.octave.pos);
     }
     assert.deepEqual(seen, [2, 3, 2, 1, 2, 3]);
@@ -426,7 +445,7 @@ describe("series modulation", () => {
     host.setParam(host.ctx.PARAM_OCT_ACTIVE, 1);
     const seen = [host.ctx.seriesState.octave.pos];
     for (let i = 0; i < 3; i++) {
-      host.ctx.advanceProgressions();
+      host.ctx.advanceProgressions(true);
       seen.push(host.ctx.seriesState.octave.pos);
     }
     assert.deepEqual(seen, [4, 3, 4, 3]);
@@ -440,8 +459,8 @@ describe("series modulation", () => {
       PARAM_OCT_SPREAD_UP: 1,
       PARAM_PROG_SHAPE: SHAPE.UP,
     }));
-    host.ctx.advanceProgressions();
-    host.ctx.advanceProgressions();
+    host.ctx.advanceProgressions(true);
+    host.ctx.advanceProgressions(true);
     assert.equal(host.ctx.seriesState.octave.pos, 3);
     host.setParam(host.ctx.PARAM_BASE_OCTAVE, 3);
     assert.equal(host.ctx.seriesState.octave.pos, 2);
