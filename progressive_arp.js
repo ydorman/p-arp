@@ -52,6 +52,12 @@ var PluginParameters = [
     valueStrings: ["Per Arp Cycle", "Per Note Step"],
     defaultValue: 0 // Per Arp Cycle
   },
+  {
+    name: "Progression Shape",
+    type: "menu",
+    valueStrings: ["Up", "Down", "Up-Down (Triangle)"],
+    defaultValue: 0 // Up
+  },
 
   // --- OCTAVE SERIES GAUGE ---
   {
@@ -146,20 +152,21 @@ var PARAM_BASE_SUBDIV = 2;
 var PARAM_GATE = 3;
 var PARAM_LATCH = 4;
 var PARAM_ADVANCE_TRIGGER = 5;
+var PARAM_PROG_SHAPE = 6;
 
-var PARAM_OCT_ACTIVE = 6;
-var PARAM_OCT_START = 7;
-var PARAM_OCT_END = 8;
-var PARAM_OCT_MAX = 9;
+var PARAM_OCT_ACTIVE = 7;
+var PARAM_OCT_START = 8;
+var PARAM_OCT_END = 9;
+var PARAM_OCT_MAX = 10;
 
-var PARAM_SUB_ACTIVE = 10;
-var PARAM_SUB_START = 11;
-var PARAM_SUB_END = 12;
+var PARAM_SUB_ACTIVE = 11;
+var PARAM_SUB_START = 12;
+var PARAM_SUB_END = 13;
 
-var PARAM_VEL_ACTIVE = 13;
-var PARAM_VEL_BASE = 14;
-var PARAM_VEL_START = 15;
-var PARAM_VEL_END = 16;
+var PARAM_VEL_ACTIVE = 14;
+var PARAM_VEL_BASE = 15;
+var PARAM_VEL_START = 16;
+var PARAM_VEL_END = 17;
 
 // ----------------------------------------------------------------------------
 // STATE
@@ -173,10 +180,15 @@ var wasPlaying = false;
 var lastBlockStartBeat = -1;   // Track previous block to detect loop wraps
 var activeSoundingPitches = {};// Currently ringing notes: { pitch: true }
 
-// Series counters (1-based indices into user series range)
+// Series counters & direction state (for Up-Down / Triangle bounce)
 var currentOctaveN = 1;
+var octaveDir = 1;
+
 var currentSubdivN = 3;
+var subdivDir = 1;
+
 var currentVelocityN = 1;
+var velocityDir = 1;
 
 // ----------------------------------------------------------------------------
 // HELPER FUNCTIONS
@@ -240,45 +252,137 @@ function moduloStage(n, maxStages) {
   return ((n - 1) % maxStages) + 1;
 }
 
-// Advance a parameter's series pointer
-function advanceSeriesN(currentN, startN, endN) {
+// Step a series value across [minVal, maxVal] according to shape:
+// 0 = Up (Sawtooth: min -> max -> min)
+// 1 = Down (Sawtooth: max -> min -> max)
+// 2 = Up-Down (Triangle: min -> max -> min smoothly)
+function stepSeriesValue(currentVal, currentDir, startN, endN, shape) {
   var minVal = Math.min(startN, endN);
   var maxVal = Math.max(startN, endN);
-  
-  if (startN <= endN) {
-    var next = currentN + 1;
-    if (next > maxVal) next = minVal;
-    return next;
+
+  if (minVal === maxVal) {
+    return { val: minVal, dir: 1 };
+  }
+
+  var val = currentVal;
+  var dir = currentDir;
+
+  // Clamp within bounds
+  if (val < minVal) {
+    val = minVal;
+    dir = 1;
+  } else if (val > maxVal) {
+    val = maxVal;
+    dir = -1;
+  }
+
+  if (shape === 0) { // Up: e.g. 1, 2, 3, 1, 2, 3...
+    val++;
+    if (val > maxVal) {
+      val = minVal;
+    }
+    dir = 1;
+  } else if (shape === 1) { // Down: e.g. 3, 2, 1, 3, 2, 1...
+    val--;
+    if (val < minVal) {
+      val = maxVal;
+    }
+    dir = -1;
+  } else if (shape === 2) { // Up-Down (Triangle): e.g. 1, 2, 3, 2, 1, 2, 3...
+    if (dir >= 0) {
+      val++;
+      if (val >= maxVal) {
+        val = maxVal;
+        dir = -1; // Bounce downward
+      }
+    } else {
+      val--;
+      if (val <= minVal) {
+        val = minVal;
+        dir = 1; // Bounce upward
+      }
+    }
+  }
+
+  return { val: val, dir: dir };
+}
+
+// Reset series counters and directions based on chosen shape and ranges
+function resetSeriesState() {
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+
+  // Octave
+  var octMin = Math.min(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
+  var octMax = Math.max(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
+  if (shape === 1) { // Down starts at top
+    currentOctaveN = octMax;
+    octaveDir = -1;
   } else {
-    // Reverse progression
-    var next = currentN - 1;
-    if (next < minVal) next = maxVal;
-    return next;
+    currentOctaveN = octMin;
+    octaveDir = 1;
+  }
+
+  // Subdivision
+  var subMin = Math.min(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
+  var subMax = Math.max(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
+  if (shape === 1) { // Down starts at top
+    currentSubdivN = subMax;
+    subdivDir = -1;
+  } else {
+    currentSubdivN = subMin;
+    subdivDir = 1;
+  }
+
+  // Velocity
+  var velMin = Math.min(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
+  var velMax = Math.max(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
+  if (shape === 1) { // Down starts at top
+    currentVelocityN = velMax;
+    velocityDir = -1;
+  } else {
+    currentVelocityN = velMin;
+    velocityDir = 1;
   }
 }
 
 // Advance series for all active modulations
 function advanceProgressions() {
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+
   if (GetParameter(PARAM_OCT_ACTIVE)) {
-    currentOctaveN = advanceSeriesN(
+    var octResult = stepSeriesValue(
       currentOctaveN,
+      octaveDir,
       GetParameter(PARAM_OCT_START),
-      GetParameter(PARAM_OCT_END)
+      GetParameter(PARAM_OCT_END),
+      shape
     );
+    currentOctaveN = octResult.val;
+    octaveDir = octResult.dir;
   }
+
   if (GetParameter(PARAM_SUB_ACTIVE)) {
-    currentSubdivN = advanceSeriesN(
+    var subResult = stepSeriesValue(
       currentSubdivN,
+      subdivDir,
       GetParameter(PARAM_SUB_START),
-      GetParameter(PARAM_SUB_END)
+      GetParameter(PARAM_SUB_END),
+      shape
     );
+    currentSubdivN = subResult.val;
+    subdivDir = subResult.dir;
   }
+
   if (GetParameter(PARAM_VEL_ACTIVE)) {
-    currentVelocityN = advanceSeriesN(
+    var velResult = stepSeriesValue(
       currentVelocityN,
+      velocityDir,
       GetParameter(PARAM_VEL_START),
-      GetParameter(PARAM_VEL_END)
+      GetParameter(PARAM_VEL_END),
+      shape
     );
+    currentVelocityN = velResult.val;
+    velocityDir = velResult.dir;
   }
 }
 
@@ -430,9 +534,7 @@ function ProcessMIDI() {
   if (info.playing && !wasPlaying) {
     wasPlaying = true;
     lastBlockStartBeat = info.blockStartBeat;
-    currentOctaveN = GetParameter(PARAM_OCT_START);
-    currentSubdivN = GetParameter(PARAM_SUB_START);
-    currentVelocityN = GetParameter(PARAM_VEL_START);
+    resetSeriesState();
     currentStepIndex = 0;
     rebuildSequence();
     
@@ -559,23 +661,30 @@ function ProcessMIDI() {
 // ----------------------------------------------------------------------------
 
 function ParameterChanged(param, value) {
-  // Clamp series positions to new ranges without abruptly resetting phase mid-cycle
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+
+  // Octave bounds
   var minOct = Math.min(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
   var maxOct = Math.max(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
-  if (currentOctaveN < minOct || currentOctaveN > maxOct || param === PARAM_OCT_ACTIVE) {
-    currentOctaveN = GetParameter(PARAM_OCT_START);
+  if (currentOctaveN < minOct || currentOctaveN > maxOct || param === PARAM_OCT_ACTIVE || param === PARAM_PROG_SHAPE) {
+    currentOctaveN = (shape === 1) ? maxOct : minOct;
+    octaveDir = (shape === 1) ? -1 : 1;
   }
 
+  // Subdivision bounds
   var minSub = Math.min(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
   var maxSub = Math.max(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
-  if (currentSubdivN < minSub || currentSubdivN > maxSub || param === PARAM_SUB_ACTIVE) {
-    currentSubdivN = GetParameter(PARAM_SUB_START);
+  if (currentSubdivN < minSub || currentSubdivN > maxSub || param === PARAM_SUB_ACTIVE || param === PARAM_PROG_SHAPE) {
+    currentSubdivN = (shape === 1) ? maxSub : minSub;
+    subdivDir = (shape === 1) ? -1 : 1;
   }
 
+  // Velocity bounds
   var minVel = Math.min(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
   var maxVel = Math.max(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
-  if (currentVelocityN < minVel || currentVelocityN > maxVel || param === PARAM_VEL_ACTIVE) {
-    currentVelocityN = GetParameter(PARAM_VEL_START);
+  if (currentVelocityN < minVel || currentVelocityN > maxVel || param === PARAM_VEL_ACTIVE || param === PARAM_PROG_SHAPE) {
+    currentVelocityN = (shape === 1) ? maxVel : minVel;
+    velocityDir = (shape === 1) ? -1 : 1;
   }
 
   rebuildSequence();
@@ -589,4 +698,5 @@ function Reset() {
   currentStepIndex = 0;
   wasPlaying = false;
   lastBlockStartBeat = -1;
+  resetSeriesState();
 }
