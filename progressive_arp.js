@@ -10,6 +10,57 @@
 var NeedsTimingInfo = true;
 
 // ----------------------------------------------------------------------------
+// RATES (subdivisions)
+// ----------------------------------------------------------------------------
+// Every note value from 1/1 to 1/128 in straight, dotted and triplet form, ordered from
+// slowest to fastest for the menu, e.g. ... 1/4, 1/8 dotted, 1/4 triplet, 1/8 ...
+// family: "straight" | "dotted" | "triplet"
+// power:  note value as 1/2^power (0 = 1/1 ... 7 = 1/128). The subdivision series moves in
+//         doublings within the base rate's family (1/8 <-> 1/16, 1/8 triplet <-> 1/16 triplet).
+// beats:  step length (1 beat = quarter note)
+// grid:   snap grid for this rate. Straight and triplet rates snap to their own length;
+//         dotted rates snap to their pulse (a third of their length, e.g. 1/8 dotted -> 1/16),
+//         since a dotted grid only lines up with the bar every 3 notes.
+var RATE_MAX_POWER = 7;
+
+function buildRates() {
+  var rates = [];
+  for (var power = 0; power <= RATE_MAX_POWER; power++) {
+    var d = Math.pow(2, power);
+    var straight = 4.0 / d;
+    rates.push({ name: "1/" + d + " dotted", family: "dotted", power: power, beats: straight * 1.5, grid: straight / 2 });
+    rates.push({ name: "1/" + d, family: "straight", power: power, beats: straight, grid: straight });
+    rates.push({ name: "1/" + d + " triplet", family: "triplet", power: power, beats: straight * 2 / 3, grid: straight * 2 / 3 });
+  }
+  rates.sort(function(a, b) { return b.beats - a.beats; });
+  return rates;
+}
+var RATES = buildRates();
+
+// Index of the rate with the given family and power
+function findRate(family, power) {
+  for (var i = 0; i < RATES.length; i++) {
+    if (RATES[i].family === family && RATES[i].power === power) return i;
+  }
+  return -1;
+}
+
+function getRateNames() {
+  var names = [];
+  for (var i = 0; i < RATES.length; i++) {
+    names.push(RATES[i].name);
+  }
+  return names;
+}
+
+function getRateIndex(name) {
+  for (var i = 0; i < RATES.length; i++) {
+    if (RATES[i].name === name) return i;
+  }
+  return -1;
+}
+
+// ----------------------------------------------------------------------------
 // PLUGIN UI PARAMETERS
 // ----------------------------------------------------------------------------
 var PluginParameters = [
@@ -96,8 +147,8 @@ var PluginParameters = [
   {
     name: "Base Subdivision",
     type: "menu",
-    valueStrings: ["1/2 (n=1)", "1/4 (n=2)", "1/8 (n=3)", "1/16 (n=4)", "1/32 (n=5)", "1/64 (n=6)"],
-    defaultValue: 2 // 1/8 (n=3)
+    valueStrings: getRateNames(),
+    defaultValue: getRateIndex("1/8")
   },
   {
     name: "Subdiv Mod Active",
@@ -108,17 +159,17 @@ var PluginParameters = [
     name: "Subdiv Spread (-) Slower",
     type: "lin",
     minValue: 0,
-    maxValue: 5,
-    numberOfSteps: 5,
-    defaultValue: 1
+    maxValue: 7,
+    numberOfSteps: 7,
+    defaultValue: 1 // steps are doublings within the base rate's family (1/8 -> 1/16)
   },
   {
     name: "Subdiv Spread (+) Faster",
     type: "lin",
     minValue: 0,
-    maxValue: 5,
-    numberOfSteps: 5,
-    defaultValue: 1
+    maxValue: 7,
+    numberOfSteps: 7,
+    defaultValue: 1 // steps are doublings within the base rate's family (1/8 -> 1/16)
   },
   {
     name: "Subdiv Change Timing",
@@ -338,7 +389,9 @@ var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNot
 //                distance covered on each side.
 //                Position = k (0 is exactly the base). A side with zero spread has no steps.
 //
-// baseOffset converts the base parameter to a series value (e.g. subdivision menu index -> n).
+// baseOffset converts the base parameter to a series value (0 when the menu index is the value).
+// Optional baseToPos / posToValue map between the base parameter, series positions and the
+// parameter value for range series whose positions are not the values themselves.
 // cycleOnly series advance only at the end of an arp cycle, even when Advance Trigger is
 // "Per Note Step" (switching patterns on every note just scrambles them).
 var SERIES = {
@@ -354,9 +407,13 @@ var SERIES = {
     minValue: 1, maxValue: 4 // octaves
   },
   subdiv: {
-    kind: "range", baseParam: PARAM_BASE_SUBDIV, baseOffset: 1, activeParam: PARAM_SUB_ACTIVE,
+    kind: "range", baseParam: PARAM_BASE_SUBDIV, baseOffset: 0, activeParam: PARAM_SUB_ACTIVE,
     spreadDownParam: PARAM_SUB_SPREAD_DOWN, spreadUpParam: PARAM_SUB_SPREAD_UP,
-    minValue: 1, maxValue: 6 // n in 2^n (menu index 0 is 1/2, n=1)
+    minValue: 0, maxValue: RATE_MAX_POWER, // position = power (1/2^power) within the base rate's family
+    baseToPos: function(rateIndex) { return RATES[rateIndex].power; },
+    posToValue: function(power) { // -> index into RATES
+      return findRate(RATES[GetParameter(PARAM_BASE_SUBDIV)].family, power);
+    }
   },
   gate: {
     kind: "scaled", baseParam: PARAM_GATE, baseOffset: 0, activeParam: PARAM_GATE_ACTIVE,
@@ -415,16 +472,14 @@ function getActiveNotes() {
   return heldNotes;
 }
 
-// Convert subdivision n (2^n) to beat length
-// In Logic, 1 beat = quarter note (1/4)
-// n=1: 1/2  -> 2.0 beats
-// n=2: 1/4  -> 1.0 beat
-// n=3: 1/8  -> 0.5 beats
-// n=4: 1/16 -> 0.25 beats
-// n=5: 1/32 -> 0.125 beats
-// n=6: 1/64 -> 0.0625 beats
-function getSubdivisionBeatLength(n) {
-  return 4.0 / Math.pow(2, n);
+// Step length in beats of a rate (index into RATES). In Logic, 1 beat = quarter note (1/4).
+function getRateBeats(rateIndex) {
+  return RATES[rateIndex].beats;
+}
+
+// Snap grid in beats for a rate (index into RATES)
+function getRateGrid(rateIndex) {
+  return RATES[rateIndex].grid;
 }
 
 // Swing timing for a step.
@@ -487,7 +542,7 @@ function getSeriesBounds(name) {
       maxPos: (spreadUp > 0) ? steps : 0
     };
   }
-  var base = getSeriesBase(name);
+  var base = def.baseToPos ? def.baseToPos(GetParameter(def.baseParam)) : getSeriesBase(name);
   return {
     minPos: Math.max(def.minValue, base - spreadDown),
     basePos: base,
@@ -499,7 +554,7 @@ function getSeriesBounds(name) {
 function getSeriesValueAt(name, pos) {
   var def = SERIES[name];
   if (def.kind === "range") {
-    return pos;
+    return def.posToValue ? def.posToValue(pos) : pos;
   }
   var base = getSeriesBase(name);
   var steps = GetParameter(def.stepsParam);
@@ -787,8 +842,8 @@ function ProcessMIDI() {
     currentStepIndex = 0;
     rebuildSequence();
     
-    var initialStep = getSubdivisionBeatLength(getSeriesValue("subdiv"));
-    alignSchedule(info.blockStartBeat, initialStep, initialStep);
+    var initialRate = getSeriesValue("subdiv");
+    alignSchedule(info.blockStartBeat, getRateGrid(initialRate), getRateBeats(initialRate));
     pendingRealign = null;
   }
   
@@ -805,8 +860,8 @@ function ProcessMIDI() {
   // 3. Detect DAW Loop Wrap or Backward Jump (e.g. 8-bar loop cycling)
   if (lastBlockStartBeat >= 0 && info.blockStartBeat < lastBlockStartBeat) {
     stopAllSoundingNotes();
-    var wrapStep = getSubdivisionBeatLength(getSeriesValue("subdiv"));
-    alignSchedule(info.blockStartBeat, wrapStep, wrapStep);
+    var wrapRate = getSeriesValue("subdiv");
+    alignSchedule(info.blockStartBeat, getRateGrid(wrapRate), getRateBeats(wrapRate));
     pendingRealign = null;
   }
   lastBlockStartBeat = info.blockStartBeat;
@@ -821,9 +876,10 @@ function ProcessMIDI() {
   }
 
   // 4. Catch up if transport jumped forward or got out of range
-  if (nextBeatToSchedule < info.blockStartBeat || nextBeatToSchedule > info.blockEndBeat + 4.0) {
-    var catchStep = getSubdivisionBeatLength(getSeriesValue("subdiv"));
-    alignSchedule(info.blockStartBeat, catchStep, catchStep);
+  // (the schedule can legitimately run one slowest step, 6 beats, past the block)
+  if (nextBeatToSchedule < info.blockStartBeat || nextBeatToSchedule > info.blockEndBeat + 8.0) {
+    var catchRate = getSeriesValue("subdiv");
+    alignSchedule(info.blockStartBeat, getRateGrid(catchRate), getRateBeats(catchRate));
     pendingRealign = null;
   }
 
@@ -839,7 +895,8 @@ function ProcessMIDI() {
 
     // A. Calculate subdivision duration for this step
     var subdivN = getSeriesValue("subdiv");
-    var stepBeatDuration = getSubdivisionBeatLength(subdivN);
+    var stepBeatDuration = getRateBeats(subdivN);
+    var stepGrid = getRateGrid(subdivN);
 
     // Grid alignment, per "Subdiv Change Timing":
     //   Snap to Grid: every note snaps forward to its own rate's grid, keeping the phrase anchored
@@ -853,7 +910,7 @@ function ProcessMIDI() {
     //   "beat":  to the beat, or this rate's grid if coarser (Flow: subdivision series completed a pass)
     var snapToGrid = (GetParameter(PARAM_SUB_TIMING) === 0);
     if (pendingRealign || snapToGrid) {
-      var gridLength = (pendingRealign === "beat") ? Math.max(1.0, stepBeatDuration) : stepBeatDuration;
+      var gridLength = (pendingRealign === "beat") ? Math.max(1.0, stepGrid) : stepGrid;
       alignSchedule(nextBeatToSchedule, gridLength, stepBeatDuration);
       pendingRealign = null;
       if (nextBeatToSchedule >= info.blockEndBeat) {

@@ -9,7 +9,18 @@ const PATTERN = { UP: 0, DOWN: 1, UP_DOWN: 2, DOWN_UP: 3, AS_PLAYED: 4, RANDOM: 
 const SHAPE = { UP: 0, DOWN: 1, TRIANGLE: 2 };
 const TRIGGER = { CYCLE: 0, STEP: 1 };
 const TIMING = { SNAP: 0, FLOW: 1 };
-const SUBDIV = { HALF: 0, QUARTER: 1, EIGHTH: 2, SIXTEENTH: 3, THIRTYSECOND: 4, SIXTYFOURTH: 5 };
+// Rate menu indices, looked up by name from the script's RATES table
+const RATE = (() => {
+  const { ctx } = loadScript(SCRIPT);
+  const byName = {};
+  ctx.RATES.forEach((r, i) => { byName[r.name] = i; });
+  return byName;
+})();
+const SUBDIV = {
+  HALF: RATE["1/2"], QUARTER: RATE["1/4"], EIGHTH: RATE["1/8"],
+  SIXTEENTH: RATE["1/16"], THIRTYSECOND: RATE["1/32"], SIXTYFOURTH: RATE["1/64"],
+};
+const r4 = (x) => Math.round(x * 1e4) / 1e4;
 
 /** Load the arp with named parameter overrides, e.g. { PARAM_PATTERN: 0 }. */
 function arp(named = {}, options = {}) {
@@ -48,10 +59,27 @@ const PLAIN = {
 // Pure helpers
 // ----------------------------------------------------------------------------
 
-describe("getSubdivisionBeatLength", () => {
-  it("maps n to 4 / 2^n beats", () => {
-    const { ctx } = arp();
-    assert.deepEqual([1, 2, 3, 4, 5, 6].map(ctx.getSubdivisionBeatLength), [2, 1, 0.5, 0.25, 0.125, 0.0625]);
+describe("rates", () => {
+  const { ctx } = arp();
+  it("has straight, dotted and triplet values for 1/1..1/128, slowest first", () => {
+    assert.equal(ctx.RATES.length, 24);
+    const names = Array.from(ctx.RATES, (r) => r.name);
+    assert.deepEqual(names.slice(names.indexOf("1/4"), names.indexOf("1/8") + 1), ["1/4", "1/8 dotted", "1/4 triplet", "1/8"]);
+    for (let i = 1; i < ctx.RATES.length; i++) assert.ok(ctx.RATES[i].beats < ctx.RATES[i - 1].beats);
+  });
+  it("step lengths in beats (quarter note = 1)", () => {
+    const beatsOf = (name) => r4(ctx.getRateBeats(RATE[name]));
+    assert.deepEqual(["1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128"].map(beatsOf), [4, 2, 1, 0.5, 0.25, 0.125, 0.0625, 0.0313]);
+    assert.deepEqual(["1/8 dotted", "1/4 triplet"].map(beatsOf), [0.75, 0.6667]);
+  });
+  it("dotted rates snap to their pulse, others to their own length", () => {
+    assert.equal(ctx.getRateGrid(RATE["1/8 dotted"]), 0.25);
+    assert.equal(r4(ctx.getRateGrid(RATE["1/4 triplet"])), 0.6667);
+    assert.equal(ctx.getRateGrid(RATE["1/8"]), 0.5);
+  });
+  it("menu defaults to 1/8", () => {
+    const p = ctx.PluginParameters[ctx.PARAM_BASE_SUBDIV];
+    assert.equal(p.valueStrings[p.defaultValue], "1/8");
   });
 });
 
@@ -107,10 +135,16 @@ describe("series bounds", () => {
     const b = ctx.getSeriesBounds("octave");
     assert.deepEqual([b.minPos, b.basePos, b.maxPos], [1, 4, 4]);
   });
-  it("subdivision bounds are clamped to n=1..6", () => {
-    const { ctx } = arp({ PARAM_BASE_SUBDIV: SUBDIV.SIXTEENTH, PARAM_SUB_SPREAD_DOWN: 1, PARAM_SUB_SPREAD_UP: 3 });
-    const b = ctx.getSeriesBounds("subdiv");
-    assert.deepEqual([b.minPos, b.basePos, b.maxPos], [3, 4, 6]);
+  it("subdivision bounds are doublings within the base rate's family, clamped to 1/1..1/128", () => {
+    const rateName = (ctx, pos) => ctx.RATES[ctx.getSeriesValueAt("subdiv", pos)].name;
+    const names = (named) => {
+      const { ctx } = arp(named);
+      const b = ctx.getSeriesBounds("subdiv");
+      return [rateName(ctx, b.minPos), rateName(ctx, b.basePos), rateName(ctx, b.maxPos)];
+    };
+    assert.deepEqual(names({ PARAM_BASE_SUBDIV: RATE["1/16"], PARAM_SUB_SPREAD_DOWN: 1, PARAM_SUB_SPREAD_UP: 7 }), ["1/8", "1/16", "1/128"]);
+    assert.deepEqual(names({ PARAM_BASE_SUBDIV: RATE["1/8 triplet"], PARAM_SUB_SPREAD_DOWN: 1, PARAM_SUB_SPREAD_UP: 1 }), ["1/4 triplet", "1/8 triplet", "1/16 triplet"]);
+    assert.deepEqual(names({ PARAM_BASE_SUBDIV: RATE["1/4 dotted"], PARAM_SUB_SPREAD_DOWN: 7, PARAM_SUB_SPREAD_UP: 2 }), ["1/1 dotted", "1/4 dotted", "1/16 dotted"]);
   });
   it("pattern bounds are clamped to the menu range", () => {
     const { ctx } = arp({ PARAM_PATTERN: PATTERN.DOWN, PARAM_PAT_SPREAD_DOWN: 3, PARAM_PAT_SPREAD_UP: 5 });
@@ -687,7 +721,7 @@ describe("chord restart and grid alignment", () => {
     PARAM_SUB_SPREAD_UP: 3,
   });
 
-  it("subdivision spread reaches the full 1/2..1/64 range from either end", () => {
+  it("subdivision spread reaches 1/2..1/64 from either end", () => {
     const { ctx } = arp({ PARAM_BASE_SUBDIV: SUBDIV.HALF, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 5 });
     const b = ctx.getSeriesBounds("subdiv");
     assert.deepEqual([b.minPos, b.maxPos], [1, 6]);
@@ -753,5 +787,52 @@ describe("chord restart and grid alignment", () => {
     [60, 64, 67].forEach((p) => host.noteOn(p));
     host.play(8);
     for (const n of host.noteOns()) assert.equal((n.beat - 1) % 0.25, 0, `off grid at ${n.beat}`);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Dotted & triplet rates
+// ----------------------------------------------------------------------------
+
+describe("dotted and triplet rates", () => {
+  it("play at their length", () => {
+    const dotted = arp(Object.assign({}, PLAIN, { PARAM_BASE_SUBDIV: RATE["1/8 dotted"] }));
+    dotted.noteOn(60);
+    dotted.play(3);
+    assert.deepEqual(beats(before(dotted.noteOns(), 4)), [1, 1.75, 2.5, 3.25]);
+
+    const triplet = arp(Object.assign({}, PLAIN, { PARAM_BASE_SUBDIV: RATE["1/8 triplet"] }));
+    triplet.noteOn(60);
+    triplet.play(2);
+    assert.deepEqual(beats(before(triplet.noteOns(), 3)).map(r4), [1, 1.3333, 1.6667, 2, 2.3333, 2.6667]);
+  });
+
+  it("a triplet series stays triplet: 1/8 triplet -> 1/16 triplet per cycle", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_BASE_SUBDIV: RATE["1/8 triplet"], PARAM_SUB_ACTIVE: 1,
+      PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 1, PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(3);
+    // 1/8T x3 (1/3 beat) | 1/16T x3 (1/6 beat) | 1/8T x3
+    assert.deepEqual(beats(before(host.noteOns(), 3.4)).map(r4), [1, 1.3333, 1.6667, 2, 2.1667, 2.3333, 2.6667, 3, 3.3333]);
+  });
+
+  it("a dotted series stays dotted: 1/8 dotted -> 1/16 dotted per cycle", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_BASE_SUBDIV: RATE["1/8 dotted"], PARAM_SUB_ACTIVE: 1,
+      PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 1, PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(5);
+    // 1/8D x3 (0.75) | 1/16D x3 (0.375) | 1/8D again, 4.375 snapped to its 1/16 pulse grid -> 4.5
+    assert.deepEqual(beats(before(host.noteOns(), 5.9)), [1, 1.75, 2.5, 3.25, 3.625, 4, 4.5, 5.25]);
+  });
+
+  it("slow rates (1/1 dotted) are not mistaken for a transport jump", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_BASE_SUBDIV: RATE["1/1 dotted"] }));
+    host.noteOn(60);
+    host.play(13);
+    assert.deepEqual(beats(host.noteOns()), [1, 7, 13]);
   });
 });
