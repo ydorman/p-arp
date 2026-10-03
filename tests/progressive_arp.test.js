@@ -8,6 +8,7 @@ const SCRIPT = "progressive_arp.js";
 const PATTERN = { UP: 0, DOWN: 1, UP_DOWN: 2, DOWN_UP: 3, AS_PLAYED: 4, RANDOM: 5 };
 const SHAPE = { UP: 0, DOWN: 1, TRIANGLE: 2 };
 const TRIGGER = { CYCLE: 0, STEP: 1 };
+const TIMING = { SNAP: 0, FLOW: 1 };
 const SUBDIV = { HALF: 0, QUARTER: 1, EIGHTH: 2, SIXTEENTH: 3, THIRTYSECOND: 4, SIXTYFOURTH: 5 };
 
 /** Load the arp with named parameter overrides, e.g. { PARAM_PATTERN: 0 }. */
@@ -383,7 +384,7 @@ describe("series modulation", () => {
     assert.deepEqual(pitches(before(host.noteOns(), 7)), [60, 64, 67, 60, 64, 67, 72, 76, 79, 60, 64, 67]);
   });
 
-  it("subdivision speeds up per arp cycle and stays on the grid", () => {
+  it("Snap to Grid: subdivision speeds up per arp cycle, each note on its rate's grid", () => {
     const host = arp(Object.assign({}, PLAIN, {
       PARAM_SUB_ACTIVE: 1,
       PARAM_SUB_SPREAD_DOWN: 0,
@@ -392,8 +393,22 @@ describe("series modulation", () => {
     }));
     [60, 64, 67].forEach((p) => host.noteOn(p));
     host.play(4);
-    // 1/8, 1/8, 1/8 | 1/16 x3 | back to 1/8 (snapped forward from 3.25 to 3.5)
+    // 1/8 x3 | 1/16 x3 | back to 1/8 (snapped forward from 3.25 to 3.5)
     assert.deepEqual(beats(before(host.noteOns(), 5)), [1, 1.5, 2, 2.5, 2.75, 3, 3.5, 4, 4.5]);
+  });
+
+  it("Flow: subdivision speeds up per arp cycle without gaps, realigning to the beat when the series starts over", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_SUB_TIMING: TIMING.FLOW,
+      PARAM_SUB_ACTIVE: 1,
+      PARAM_SUB_SPREAD_DOWN: 0,
+      PARAM_SUB_SPREAD_UP: 1,
+      PARAM_PROG_SHAPE: SHAPE.UP,
+    }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(5);
+    // 1/8 x3 | 1/16 x3 (no gap) | series starts over: 3.25 snaps to the next beat, 4.0 | 1/8 x3
+    assert.deepEqual(beats(before(host.noteOns(), 5.5)), [1, 1.5, 2, 2.5, 2.75, 3, 4, 4.5, 5]);
   });
 
   it("velocity walks its 9 steps per note (Up shape)", () => {
@@ -524,15 +539,23 @@ describe("series modulation", () => {
 describe("swing", () => {
   it("getSwingTiming splits each pair of steps swing : (100 - swing)", () => {
     const { ctx } = arp();
-    const t = (beat, swing) => {
-      const r = ctx.getSwingTiming(beat, 0.5, swing);
+    const t = (isOffBeat, swing) => {
+      const r = ctx.getSwingTiming(isOffBeat, 0.5, swing);
       return [r.offset, r.length];
     };
-    assert.deepEqual(t(1.0, 50), [0, 0.5]);
-    assert.deepEqual(t(1.5, 50), [0, 0.5]);
-    assert.deepEqual(t(1.0, 75), [0, 0.75]);
-    assert.deepEqual(t(1.5, 75), [0.25, 0.25]);
-    assert.deepEqual(t(2.0, 75), [0, 0.75], "next pair starts on-beat again");
+    assert.deepEqual(t(false, 50), [0, 0.5]);
+    assert.deepEqual(t(true, 50), [0, 0.5]);
+    assert.deepEqual(t(false, 75), [0, 0.75]);
+    assert.deepEqual(t(true, 75), [0.25, 0.25]);
+  });
+
+  it("a chord started on an off-beat grid line plays it as the off-beat", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_SWING: 75 }));
+    host.play(0.6); // transport running, nothing held; chord arrives at ~1.6
+    host.noteOn(60);
+    host.play(2);
+    // first grid line is 2.0 (on-beat), then 2.5 is the off-beat, swung to 2.75
+    assert.deepEqual(beats(before(host.noteOns(), 3.5)), [2, 2.75, 3]);
   });
 
   it("delays off-beat notes and keeps gate relative to the swung slot", () => {
@@ -646,5 +669,89 @@ describe("humanize", () => {
     host.play(12);
     host.stop();
     assert.deepEqual(pairNotes(host.events).unmatched, []);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Chord restart & grid realignment
+// ----------------------------------------------------------------------------
+
+describe("chord restart and grid alignment", () => {
+  // The settings from the bug report: Down shape, 1/2 base, subdivision spread (+) 3
+  const REPORT = Object.assign({}, PLAIN, {
+    PARAM_PROG_SHAPE: SHAPE.DOWN,
+    PARAM_PATTERN: PATTERN.DOWN,
+    PARAM_BASE_SUBDIV: SUBDIV.HALF,
+    PARAM_SUB_ACTIVE: 1,
+    PARAM_SUB_SPREAD_DOWN: 0,
+    PARAM_SUB_SPREAD_UP: 3,
+  });
+
+  it("subdivision spread reaches the full 1/2..1/64 range from either end", () => {
+    const { ctx } = arp({ PARAM_BASE_SUBDIV: SUBDIV.HALF, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 5 });
+    const b = ctx.getSeriesBounds("subdiv");
+    assert.deepEqual([b.minPos, b.maxPos], [1, 6]);
+    const top = arp({ PARAM_BASE_SUBDIV: SUBDIV.SIXTYFOURTH, PARAM_SUB_SPREAD_DOWN: 5, PARAM_SUB_SPREAD_UP: 0 });
+    const t = top.ctx.getSeriesBounds("subdiv");
+    assert.deepEqual([t.minPos, t.maxPos], [1, 6]);
+  });
+
+  it("Snap to Grid, Per Note Step: each note waits for its rate's grid", () => {
+    const host = arp(Object.assign({}, REPORT, { PARAM_ADVANCE_TRIGGER: TRIGGER.STEP }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(10);
+    // 1/16 @1, 1/8 waits for 1.5, 1/4 @2, 1/2 @3 (odd beats), repeat @5
+    assert.deepEqual(beats(before(host.noteOns(), 10)), [1, 1.5, 2, 3, 5, 5.5, 6, 7, 9, 9.5]);
+  });
+
+  it("Flow, Per Note Step: plays the exact rhythm and realigns to the beat each pass", () => {
+    const host = arp(Object.assign({}, REPORT, { PARAM_SUB_TIMING: TIMING.FLOW, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(10);
+    // 1/16, 1/8, 1/4, 1/2 back to back (3.75 beats), then wait for the next beat (5.0)
+    assert.deepEqual(beats(before(host.noteOns(), 10)), [1, 1.25, 1.75, 2.75, 5, 5.25, 5.75, 6.75, 9, 9.25, 9.75]);
+  });
+
+  for (const timing of [TIMING.SNAP, TIMING.FLOW]) it(`a new chord restarts the series and pattern, aligned to its starting rate grid (${timing ? "Flow" : "Snap"})`, () => {
+    const host = arp(Object.assign({}, REPORT, { PARAM_SUB_TIMING: timing })); // Per Arp Cycle
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(8); // first chord has slowed down by now
+    [60, 64, 67].forEach((p) => host.noteOff(p));
+    host.play(0.6);
+    const pressedAt = host.timing.blockEndBeat;
+    host.events.length = 0;
+    [62, 65, 69].forEach((p) => host.noteOn(p));
+    host.play(2);
+    const ons = host.noteOns().slice(0, 4);
+    // Starts again fast (1/16) from the top of the Down pattern, on the 1/16 grid
+    assert.deepEqual(pitches(ons), [69, 65, 62, 69]);
+    assert.ok(ons[0].beat >= pressedAt - 1e-9 && ons[0].beat - pressedAt < 0.25, `first note at ${ons[0].beat}, pressed at ${pressedAt}`);
+    assert.equal((ons[0].beat - 1) % 0.25, 0, "on the 1/16 grid");
+    assert.deepEqual(ons.slice(1, 3).map((n, i) => n.beat - ons[i].beat), [0.25, 0.25]);
+  });
+
+  it("adding notes to a held chord does not restart the series", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_DOWN: 0, PARAM_OCT_SPREAD_UP: 2 }));
+    host.noteOn(60);
+    host.play(1.2); // past the first cycles, series has advanced
+    const before = host.ctx.seriesState.octave.pos;
+    host.noteOn(64);
+    assert.equal(host.ctx.seriesState.octave.pos, before);
+  });
+
+  it("changing the base rate by hand snaps the next note to the new grid", () => {
+    const host = arp(PLAIN); // 1/8
+    host.noteOn(60);
+    host.play(0.6); // notes at 1.0 and 1.5 scheduled
+    host.setParam(host.ctx.PARAM_BASE_SUBDIV, SUBDIV.QUARTER);
+    host.play(3);
+    assert.deepEqual(beats(before(host.noteOns(), 4.5)), [1, 1.5, 2, 3, 4]);
+  });
+
+  it("steady rate without subdivision modulation stays on the grid", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_BASE_SUBDIV: SUBDIV.SIXTEENTH, PARAM_OCT_ACTIVE: 1, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP }));
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(8);
+    for (const n of host.noteOns()) assert.equal((n.beat - 1) % 0.25, 0, `off grid at ${n.beat}`);
   });
 });
