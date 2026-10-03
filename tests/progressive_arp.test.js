@@ -11,14 +11,23 @@ const TRIGGER = { CYCLE: 0, STEP: 1 };
 const SUBDIV = { HALF: 0, QUARTER: 1, EIGHTH: 2, SIXTEENTH: 3, THIRTYSECOND: 4, SIXTYFOURTH: 5 };
 
 /** Load the arp with named parameter overrides, e.g. { PARAM_PATTERN: 0 }. */
-function arp(named = {}) {
+function arp(named = {}, options = {}) {
   const probe = loadScript(SCRIPT);
   const params = {};
   for (const [name, value] of Object.entries(named)) {
     assert.ok(name in probe.ctx, `unknown parameter constant ${name}`);
     params[probe.ctx[name]] = value;
   }
-  return loadScript(SCRIPT, { params });
+  return loadScript(SCRIPT, Object.assign({}, options, { params }));
+}
+
+/** Deterministic pseudo-random generator (LCG) returning values in [0, 1). */
+function seededRandom(seed = 1) {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
 }
 
 // Array.from: arrays created inside the script's vm context fail strict deepEqual against host arrays.
@@ -505,5 +514,137 @@ describe("series modulation", () => {
     assert.equal(host.ctx.seriesState.octave.pos, 3);
     host.setParam(host.ctx.PARAM_BASE_OCTAVE, 3);
     assert.equal(host.ctx.seriesState.octave.pos, 2);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Swing
+// ----------------------------------------------------------------------------
+
+describe("swing", () => {
+  it("getSwingTiming splits each pair of steps swing : (100 - swing)", () => {
+    const { ctx } = arp();
+    const t = (beat, swing) => {
+      const r = ctx.getSwingTiming(beat, 0.5, swing);
+      return [r.offset, r.length];
+    };
+    assert.deepEqual(t(1.0, 50), [0, 0.5]);
+    assert.deepEqual(t(1.5, 50), [0, 0.5]);
+    assert.deepEqual(t(1.0, 75), [0, 0.75]);
+    assert.deepEqual(t(1.5, 75), [0.25, 0.25]);
+    assert.deepEqual(t(2.0, 75), [0, 0.75], "next pair starts on-beat again");
+  });
+
+  it("delays off-beat notes and keeps gate relative to the swung slot", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_SWING: 75, PARAM_GATE: 100 }));
+    host.noteOn(60);
+    host.play(2);
+    const { pairs } = pairNotes(host.events);
+    const notes = pairs.filter((p) => p.on < 3).map((p) => [p.on, p.off]);
+    assert.deepEqual(notes, [[1, 1.75], [1.75, 2], [2, 2.75], [2.75, 3]]);
+  });
+
+  it("swings pairs at the current subdivision", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_BASE_SUBDIV: SUBDIV.SIXTEENTH, PARAM_SWING: 75 }));
+    host.noteOn(60);
+    host.play(1);
+    assert.deepEqual(beats(before(host.noteOns(), 2)), [1, 1.375, 1.5, 1.875]);
+  });
+
+  it("is a series target with configurable steps", () => {
+    const { ctx } = arp({
+      PARAM_SWING: 50, PARAM_SWING_ACTIVE: 1, PARAM_SWING_SPREAD_DOWN: 0, PARAM_SWING_SPREAD_UP: 24, PARAM_SWING_STEPS: 4,
+    });
+    const b = ctx.getSeriesBounds("swing");
+    assert.deepEqual([b.minPos, b.maxPos], [0, 4]);
+    assert.deepEqual([0, 1, 2, 3, 4].map((pos) => ctx.getSeriesValueAt("swing", pos)), [50, 56, 62, 68, 74]);
+  });
+
+  it("clamps the swing series to 50..75%", () => {
+    const { ctx } = arp({ PARAM_SWING: 70, PARAM_SWING_ACTIVE: 1, PARAM_SWING_SPREAD_DOWN: 25, PARAM_SWING_SPREAD_UP: 25 });
+    assert.equal(ctx.getSeriesValueAt("swing", 4), 75);
+    assert.equal(ctx.getSeriesValueAt("swing", -4), 50);
+  });
+
+  it("never schedules a swung note past the cycle end", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_SWING: 75, PARAM_GATE: 100 }));
+    host.setCycle(1, 2.75); // the off-beat at grid 2.5 swings to 2.75 = loop end, so it must be skipped
+    host.noteOn(60);
+    host.play(6);
+    for (const e of host.events) assert.ok(e.beat < 2.75, `${e.type} at ${e.beat} is past the cycle end`);
+    assert.ok(host.noteOffs().length >= host.noteOns().length);
+  });
+
+  it("timing with swing does not depend on the audio block size", () => {
+    const settings = Object.assign({}, PLAIN, {
+      PARAM_SWING: 62, PARAM_SWING_ACTIVE: 1, PARAM_SWING_SPREAD_UP: 12,
+      PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_UP: 1, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP,
+    });
+    const runs = [0.0232, 0.01, 0.37].map((blockBeats) => {
+      const host = arp(settings);
+      [60, 64, 67].forEach((p) => host.noteOn(p));
+      host.play(12, { blockBeats });
+      return before(host.noteOns(), 12).map((n) => `${n.pitch}@${n.beat}`);
+    });
+    for (const r of runs.slice(1)) assert.deepEqual(r, runs[0]);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Humanize
+// ----------------------------------------------------------------------------
+
+describe("humanize", () => {
+  it("does nothing (and draws no random numbers) when set to 0", () => {
+    let calls = 0;
+    const host = arp(PLAIN, { random: () => { calls++; return 0.5; } });
+    host.noteOn(60, 90);
+    host.play(2);
+    assert.equal(calls, 0);
+    assert.ok(host.noteOns().every((n) => n.velocity === 90));
+  });
+
+  it("varies velocity within +/- the amount", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_HUMANIZE_VEL: 10 }), { random: seededRandom(7) });
+    host.noteOn(60, 100);
+    host.play(16);
+    const vels = host.noteOns().map((n) => n.velocity);
+    assert.ok(vels.every((v) => v >= 90 && v <= 110), `out of range: ${vels}`);
+    assert.ok(new Set(vels).size > 5, "expected varied velocities");
+  });
+
+  it("applies velocity humanize on top of the velocity series, clamped to 1..127", () => {
+    const high = arp(Object.assign({}, PLAIN, { PARAM_VEL_ACTIVE: 1, PARAM_VEL_BASE: 120, PARAM_VEL_SPREAD_DOWN: 0, PARAM_VEL_SPREAD_UP: 0, PARAM_HUMANIZE_VEL: 40 }), { random: () => 0.9999 });
+    high.noteOn(60);
+    high.play(1);
+    assert.ok(high.noteOns().every((n) => n.velocity === 127));
+
+    const low = arp(Object.assign({}, PLAIN, { PARAM_HUMANIZE_VEL: 40 }), { random: () => 0 });
+    low.noteOn(60, 20);
+    low.play(1);
+    assert.ok(low.noteOns().every((n) => n.velocity === 1));
+  });
+
+  it("varies note length within +/- the amount, clamped to the step", () => {
+    const longer = arp(Object.assign({}, PLAIN, { PARAM_GATE: 80, PARAM_HUMANIZE_GATE: 40 }), { random: () => 0.9999 });
+    longer.noteOn(60);
+    longer.play(2);
+    for (const p of pairNotes(longer.events).pairs) assert.ok(p.off - p.on <= 0.5 + 1e-9, "gate must not exceed 100%");
+
+    const shorter = arp(Object.assign({}, PLAIN, { PARAM_GATE: 50, PARAM_HUMANIZE_GATE: 20 }), { random: () => 0 });
+    shorter.noteOn(60);
+    shorter.play(2);
+    for (const p of pairNotes(shorter.events).pairs) assert.ok(Math.abs(p.off - p.on - 0.15) < 1e-9, `length ${p.off - p.on}`);
+  });
+
+  it("leaves no stuck notes with swing and humanize together", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_SWING: 70, PARAM_HUMANIZE_VEL: 20, PARAM_HUMANIZE_GATE: 30, PARAM_GATE: 90,
+      PARAM_OCT_ACTIVE: 1, PARAM_SUB_ACTIVE: 1, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP,
+    }), { random: seededRandom(3) });
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(12);
+    host.stop();
+    assert.deepEqual(pairNotes(host.events).unmatched, []);
   });
 });

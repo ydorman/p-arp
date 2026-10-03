@@ -61,7 +61,8 @@ function loadScript(relativePath, options = {}) {
     NoteOn,
     NoteOff,
     ControlChange,
-    Math,
+    // options.random replaces Math.random inside the script (for deterministic tests)
+    Math: options.random ? Object.assign(Object.create(Math), { random: options.random }) : Math,
     GetParameter: (index) => params[index],
     GetTimingInfo: () => Object.assign({}, timing),
     Trace: (msg) => traces.push(String(msg)),

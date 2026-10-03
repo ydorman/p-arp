@@ -2,8 +2,9 @@
  * Progressive Arpeggiator for Logic Pro Scripter
  * 
  * An arpeggiator that modulates parameters (Pattern, Octave Range, Subdivision,
- * Gate Length, Velocity) across a series around each parameter's Base value,
- * advancing on each arp cycle or note step.
+ * Gate Length, Velocity, Swing) across a series around each parameter's Base value,
+ * advancing on each arp cycle or note step. Optional humanization adds random
+ * velocity and note length variation on top.
  */
 
 var NeedsTimingInfo = true;
@@ -199,6 +200,67 @@ var PluginParameters = [
     maxValue: 8,
     numberOfSteps: 7,
     defaultValue: 4
+  },
+
+  // --- SWING SERIES GAUGE ---
+  {
+    name: "Swing (%)",
+    type: "lin",
+    minValue: 50,
+    maxValue: 75,
+    numberOfSteps: 25,
+    defaultValue: 50, // 50% = straight, 66% = triplet feel, 75% = dotted
+    unit: "%"
+  },
+  {
+    name: "Swing Mod Active",
+    type: "checkbox",
+    defaultValue: 0
+  },
+  {
+    name: "Swing Spread (-) Straighter",
+    type: "lin",
+    minValue: 0,
+    maxValue: 25,
+    numberOfSteps: 25,
+    defaultValue: 0,
+    unit: "%"
+  },
+  {
+    name: "Swing Spread (+) Swingier",
+    type: "lin",
+    minValue: 0,
+    maxValue: 25,
+    numberOfSteps: 25,
+    defaultValue: 16,
+    unit: "%"
+  },
+  {
+    name: "Swing Steps (per side)",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 4
+  },
+
+  // --- HUMANIZE (random, independent of the series) ---
+  {
+    name: "Humanize Velocity (+/-)",
+    type: "lin",
+    minValue: 0,
+    maxValue: 40,
+    numberOfSteps: 40,
+    defaultValue: 0
+  },
+  {
+    name: "Humanize Gate (+/- %)",
+    type: "lin",
+    minValue: 0,
+    maxValue: 40,
+    numberOfSteps: 40,
+    defaultValue: 0,
+    unit: "%"
   }
 ];
 
@@ -233,6 +295,15 @@ var PARAM_VEL_ACTIVE = 21;
 var PARAM_VEL_SPREAD_DOWN = 22;
 var PARAM_VEL_SPREAD_UP = 23;
 var PARAM_VEL_STEPS = 24;
+
+var PARAM_SWING = 25;
+var PARAM_SWING_ACTIVE = 26;
+var PARAM_SWING_SPREAD_DOWN = 27;
+var PARAM_SWING_SPREAD_UP = 28;
+var PARAM_SWING_STEPS = 29;
+
+var PARAM_HUMANIZE_VEL = 30;
+var PARAM_HUMANIZE_GATE = 31;
 
 // ----------------------------------------------------------------------------
 // STATE
@@ -287,9 +358,14 @@ var SERIES = {
     kind: "scaled", baseParam: PARAM_VEL_BASE, baseOffset: 0, activeParam: PARAM_VEL_ACTIVE,
     spreadDownParam: PARAM_VEL_SPREAD_DOWN, spreadUpParam: PARAM_VEL_SPREAD_UP, stepsParam: PARAM_VEL_STEPS,
     minValue: 1, maxValue: 127 // MIDI velocity
+  },
+  swing: {
+    kind: "scaled", baseParam: PARAM_SWING, baseOffset: 0, activeParam: PARAM_SWING_ACTIVE,
+    spreadDownParam: PARAM_SWING_SPREAD_DOWN, spreadUpParam: PARAM_SWING_SPREAD_UP, stepsParam: PARAM_SWING_STEPS,
+    minValue: 50, maxValue: 75 // swing %
   }
 };
-var SERIES_NAMES = ["pattern", "octave", "subdiv", "gate", "velocity"];
+var SERIES_NAMES = ["pattern", "octave", "subdiv", "gate", "velocity", "swing"];
 
 // Series state (for Up-Down / Triangle bounce): { name: { pos, dir } }
 var seriesState = {};
@@ -340,6 +416,25 @@ function getActiveNotes() {
 // n=6: 1/64 -> 0.0625 beats
 function getSubdivisionBeatLength(n) {
   return 4.0 / Math.pow(2, n);
+}
+
+// Swing timing for the step starting at a straight-grid beat.
+// Steps are paired (on-beat, off-beat); swing (50..75%) is the off-beat's position within the
+// pair, so the off-beat is delayed and the pair's time is split swing : (100 - swing).
+// Returns { offset, length }: onset delay and the step's swung slot length, in beats.
+function getSwingTiming(gridBeat, stepDuration, swingPercent) {
+  var s = swingPercent / 100.0;
+  var tick = Math.round((gridBeat - 1.0) / stepDuration);
+  if (tick % 2 === 0) { // on-beat
+    return { offset: 0, length: 2 * s * stepDuration };
+  }
+  return { offset: (2 * s - 1) * stepDuration, length: 2 * (1 - s) * stepDuration };
+}
+
+// Uniform random offset in [-amount, +amount]
+function randomOffset(amount) {
+  if (amount <= 0) return 0;
+  return (Math.random() * 2 - 1) * amount;
 }
 
 // Quantize a beat position to the musical grid of a given step duration.
@@ -724,38 +819,47 @@ function ProcessMIDI() {
       noteData = sequenceNotes[currentStepIndex];
     }
 
-    // C. Calculate velocity
+    // C. Calculate velocity (series, then humanize)
     var velocity = noteData.velocity;
     if (isSeriesActive("velocity")) {
       velocity = getSeriesValue("velocity");
     }
+    velocity = Math.round(velocity + randomOffset(GetParameter(PARAM_HUMANIZE_VEL)));
+    velocity = Math.min(127, Math.max(1, velocity));
 
-    // D. Calculate Gate & Note-Off Beat
-    var gate = getSeriesValue("gate") / 100.0;
-    var noteLengthBeats = stepBeatDuration * gate;
-    var noteOffBeat = nextBeatToSchedule + noteLengthBeats;
+    // D. Apply swing: the grid pointer stays on the straight grid; only this note's timing moves
+    var swing = getSwingTiming(nextBeatToSchedule, stepBeatDuration, getSeriesValue("swing"));
+    var noteOnBeat = nextBeatToSchedule + swing.offset;
 
-    // Prevent stuck notes at loop boundaries
+    // E. Calculate Gate (series, then humanize) & Note-Off Beat, relative to the swung slot
+    var gatePercent = getSeriesValue("gate") + randomOffset(GetParameter(PARAM_HUMANIZE_GATE));
+    var gate = Math.min(100, Math.max(1, gatePercent)) / 100.0;
+    var noteOffBeat = noteOnBeat + swing.length * gate;
+
+    // Prevent stuck notes at loop boundaries (a swung note pushed past the loop end is skipped)
+    var playNote = !(info.cycling && noteOnBeat >= info.rightCycleBeat);
     if (info.cycling && noteOffBeat >= info.rightCycleBeat) {
-      noteOffBeat = Math.max(nextBeatToSchedule, info.rightCycleBeat - 0.005);
+      noteOffBeat = Math.max(noteOnBeat, info.rightCycleBeat - 0.005);
     }
 
-    // E. Emit NoteOn and NoteOff
-    var noteOn = new NoteOn();
-    noteOn.pitch = noteData.pitch;
-    noteOn.velocity = velocity;
-    noteOn.sendAtBeat(nextBeatToSchedule);
+    // F. Emit NoteOn and NoteOff
+    if (playNote) {
+      var noteOn = new NoteOn();
+      noteOn.pitch = noteData.pitch;
+      noteOn.velocity = velocity;
+      noteOn.sendAtBeat(noteOnBeat);
 
-    var noteOff = new NoteOff();
-    noteOff.pitch = noteData.pitch;
-    noteOff.velocity = 64;
-    noteOff.sendAtBeat(noteOffBeat);
+      var noteOff = new NoteOff();
+      noteOff.pitch = noteData.pitch;
+      noteOff.velocity = 64;
+      noteOff.sendAtBeat(noteOffBeat);
 
-    // Track active sounding pitch until its NoteOff beat
-    var prevOffBeat = activeSoundingPitches[noteData.pitch];
-    activeSoundingPitches[noteData.pitch] = (prevOffBeat !== undefined) ? Math.max(prevOffBeat, noteOffBeat) : noteOffBeat;
+      // Track active sounding pitch until its NoteOff beat
+      var prevOffBeat = activeSoundingPitches[noteData.pitch];
+      activeSoundingPitches[noteData.pitch] = (prevOffBeat !== undefined) ? Math.max(prevOffBeat, noteOffBeat) : noteOffBeat;
+    }
 
-    // F. Advance step index
+    // G. Advance step index
     var advanceTrigger = GetParameter(PARAM_ADVANCE_TRIGGER); // 0 = Per Cycle, 1 = Per Step
     var isCycleEnd = false;
 
@@ -765,7 +869,7 @@ function ProcessMIDI() {
       isCycleEnd = true;
     }
 
-    // G. Advance arithmetic series
+    // H. Advance arithmetic series
     if (advanceTrigger === 1 || isCycleEnd) { // Per Note Step, or Per Arp Cycle at cycle end
       advanceProgressions(isCycleEnd);
       rebuildSequence();

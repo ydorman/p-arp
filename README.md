@@ -7,7 +7,7 @@ See [Features.md](Features.md) for the product definition and roadmap.
 ## Projects
 
 ### 1. Progressive Arpeggiator (`progressive_arp.js`)
-A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Subdivision, Gate Length, Velocity) move through a series of values as the arpeggio plays, instead of staying fixed.
+A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Subdivision, Gate Length, Velocity, Swing) move through a series of values as the arpeggio plays, instead of staying fixed.
 
 #### Key Features
 - **Base + Spread series**: Each modulated parameter has a `Base` value (its musical center) plus `Spread (-)` and `Spread (+)` controls that set how far below and above the base the series travels. Moving the base shifts the whole range.
@@ -16,12 +16,14 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - **Subdivision ($2^n$)**: Base $1/2$ … $1/64$, spread 0–3 steps slower/faster (clamped to $1/2$ … $1/64$).
   - **Gate Length**: Base 10–100%; `Gate Steps (per side)` (1–8, default 4) sets how many steps the series takes below and above the base, and the spread (0–90%) sets the total distance on each side (clamped to 10–100%).
   - **Velocity**: Base 1–127; `Velocity Steps (per side)` (1–8, default 4) sets how many steps the series takes below and above the base, and the spread (0–64) sets the total velocity distance covered on each side. E.g. base 70, spread ±24, 2 steps → 46, 58, 70, 82, 94.
+  - **Swing**: Base 50–75% (50% = straight, 66% ≈ triplet feel, 75% = dotted). Steps are swung in pairs at the current subdivision: the off-beat note is delayed and gate length applies to each note's swung slot. Spread (0–25%) and `Swing Steps (per side)` work like Gate/Velocity (clamped to 50–75%).
 - **Mod Active toggles**: Each parameter can be modulated independently; when off it uses its base value.
 - **Progression Shape**: How the series traverses its range:
   - `Up` (sawtooth: min → max, then jump back to min)
   - `Down` (sawtooth: max → min, then jump back to max)
   - `Up-Down (Triangle)` (starts at base → max → min → base …)
 - **Advance Trigger**: Advance the series once per full arp cycle, or on every note step. The Pattern series always advances per arp cycle (switching patterns on every note just scrambles them).
+- **Humanize**: `Humanize Velocity` (±0–40) and `Humanize Gate` (±0–40%) add random variation to each note on top of the series (velocity clamped to 1–127, gate to 1–100%). Timing stays on the grid.
 - **Arp Patterns**: Up, Down, Up/Down, Down/Up, As Played, Random; chord latch.
 - **Musical Grid Locking**: Note triggers snap to the host subdivision grid, preventing beat drift when rates change or sliders move mid-performance.
 - **Stuck Note Protection**: Sounding notes are flushed on DAW cycle wraps, backward jumps, transport stop, and when the chord is released.
