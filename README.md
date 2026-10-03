@@ -29,3 +29,14 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Octave Range, Subdivision,
 2. In the **MIDI FX** slot of the channel strip, select **Scripter**.
 3. Open Scripter editor, paste the contents of `progressive_arp.js`, and click **Run Script**.
 4. Start Logic's transport — the arpeggiator only plays while the host is playing.
+
+## Tests
+Scripter has no test framework, so `tests/scripter_mock.js` fakes the parts of the Scripter API the scripts use (`NoteOn`/`NoteOff`, `GetParameter`, `GetTimingInfo`, `Trace`) and loads the script file unmodified in Node. Tests can call the script's functions directly or simulate host playback (blocks of `ProcessMIDI`, cycle wraps, transport stop) and inspect the MIDI it sends.
+
+Requires Node 18+ (no dependencies):
+
+```bash
+npm test
+```
+
+The script you paste into Scripter is unchanged; tests are a separate safety net and don't replace listening in Logic.
