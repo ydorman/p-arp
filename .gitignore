@@ -1,0 +1,6 @@
+# .gitignore for MIDI / Audio Scripts & Logic Pro projects
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
