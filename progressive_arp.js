@@ -66,20 +66,20 @@ var PluginParameters = [
     defaultValue: 0
   },
   {
-    name: "Octave Start (n)",
+    name: "Octave Spread (-) Below",
     type: "lin",
-    minValue: 1,
-    maxValue: 8,
-    numberOfSteps: 7,
+    minValue: 0,
+    maxValue: 3,
+    numberOfSteps: 3,
     defaultValue: 1
   },
   {
-    name: "Octave End (n)",
+    name: "Octave Spread (+) Above",
     type: "lin",
-    minValue: 1,
-    maxValue: 8,
-    numberOfSteps: 7,
-    defaultValue: 2
+    minValue: 0,
+    maxValue: 3,
+    numberOfSteps: 3,
+    defaultValue: 1
   },
   {
     name: "Max Octaves (Modulo)",
@@ -97,20 +97,20 @@ var PluginParameters = [
     defaultValue: 0
   },
   {
-    name: "Subdiv Start (n)",
+    name: "Subdiv Spread (-) Slower",
     type: "lin",
-    minValue: 1,
-    maxValue: 6,
-    numberOfSteps: 5,
-    defaultValue: 3 // 1/8
+    minValue: 0,
+    maxValue: 3,
+    numberOfSteps: 3,
+    defaultValue: 1
   },
   {
-    name: "Subdiv End (n)",
+    name: "Subdiv Spread (+) Faster",
     type: "lin",
-    minValue: 1,
-    maxValue: 6,
-    numberOfSteps: 5,
-    defaultValue: 5 // 1/32
+    minValue: 0,
+    maxValue: 3,
+    numberOfSteps: 3,
+    defaultValue: 1
   },
 
   // --- VELOCITY SERIES GAUGE ---
@@ -125,23 +125,23 @@ var PluginParameters = [
     minValue: 1,
     maxValue: 127,
     numberOfSteps: 126,
-    defaultValue: 64
+    defaultValue: 70
   },
   {
-    name: "Velocity Start (n)",
+    name: "Velocity Spread (-) Down",
     type: "lin",
-    minValue: 1,
-    maxValue: 8,
-    numberOfSteps: 7,
-    defaultValue: 1
+    minValue: 0,
+    maxValue: 64,
+    numberOfSteps: 64,
+    defaultValue: 25
   },
   {
-    name: "Velocity End (n)",
+    name: "Velocity Spread (+) Up",
     type: "lin",
-    minValue: 1,
-    maxValue: 8,
-    numberOfSteps: 7,
-    defaultValue: 8
+    minValue: 0,
+    maxValue: 64,
+    numberOfSteps: 64,
+    defaultValue: 25
   }
 ];
 
@@ -155,18 +155,18 @@ var PARAM_ADVANCE_TRIGGER = 5;
 var PARAM_PROG_SHAPE = 6;
 
 var PARAM_OCT_ACTIVE = 7;
-var PARAM_OCT_START = 8;
-var PARAM_OCT_END = 9;
+var PARAM_OCT_SPREAD_DOWN = 8;
+var PARAM_OCT_SPREAD_UP = 9;
 var PARAM_OCT_MAX = 10;
 
 var PARAM_SUB_ACTIVE = 11;
-var PARAM_SUB_START = 12;
-var PARAM_SUB_END = 13;
+var PARAM_SUB_SPREAD_DOWN = 12;
+var PARAM_SUB_SPREAD_UP = 13;
 
 var PARAM_VEL_ACTIVE = 14;
 var PARAM_VEL_BASE = 15;
-var PARAM_VEL_START = 16;
-var PARAM_VEL_END = 17;
+var PARAM_VEL_SPREAD_DOWN = 16;
+var PARAM_VEL_SPREAD_UP = 17;
 
 // ----------------------------------------------------------------------------
 // STATE
@@ -187,7 +187,7 @@ var octaveDir = 1;
 var currentSubdivN = 3;
 var subdivDir = 1;
 
-var currentVelocityN = 1;
+var currentVelocityStep = 0;   // -4 to +4 (0 is exact base)
 var velocityDir = 1;
 
 // ----------------------------------------------------------------------------
@@ -240,10 +240,51 @@ function quantizeBeatToGrid(beat, stepDuration) {
   return 1.0 + (Math.ceil(ticks) * stepDuration);
 }
 
-// Calculate velocity given n and base: (127 - base) / 8 * n + base
-function calculateVelocity(n, base) {
-  var vel = Math.round(((127 - base) / 8.0) * n + base);
+// Calculate velocity given step k (-4..+4) around Velocity Base
+function calculateVelocity(k) {
+  var base = GetParameter(PARAM_VEL_BASE);
+  if (!GetParameter(PARAM_VEL_ACTIVE)) {
+    return base;
+  }
+  var spreadDown = GetParameter(PARAM_VEL_SPREAD_DOWN);
+  var spreadUp = GetParameter(PARAM_VEL_SPREAD_UP);
+
+  var vel = base;
+  if (k < 0) {
+    vel = base - Math.round((spreadDown * Math.abs(k)) / 4.0);
+  } else if (k > 0) {
+    vel = base + Math.round((spreadUp * k) / 4.0);
+  }
   return Math.min(127, Math.max(1, vel));
+}
+
+// Compute dynamic Octave bounds around Base Octave
+function getOctaveBounds() {
+  var base = GetParameter(PARAM_BASE_OCTAVE);
+  var spreadDown = GetParameter(PARAM_OCT_SPREAD_DOWN);
+  var spreadUp = GetParameter(PARAM_OCT_SPREAD_UP);
+  var minVal = Math.max(1, base - spreadDown);
+  var maxVal = Math.min(4, base + spreadUp);
+  return { base: base, minVal: minVal, maxVal: maxVal };
+}
+
+// Compute dynamic Subdivision bounds around Base Subdivision
+function getSubdivBounds() {
+  var base = GetParameter(PARAM_BASE_SUBDIV) + 1; // 1..6
+  var spreadDown = GetParameter(PARAM_SUB_SPREAD_DOWN);
+  var spreadUp = GetParameter(PARAM_SUB_SPREAD_UP);
+  var minVal = Math.max(1, base - spreadDown);
+  var maxVal = Math.min(6, base + spreadUp);
+  return { base: base, minVal: minVal, maxVal: maxVal };
+}
+
+// Compute dynamic Velocity step bounds around Base Velocity
+function getVelocityBounds() {
+  var spreadDown = GetParameter(PARAM_VEL_SPREAD_DOWN);
+  var spreadUp = GetParameter(PARAM_VEL_SPREAD_UP);
+  var minK = (spreadDown > 0) ? -4 : 0;
+  var maxK = (spreadUp > 0) ? 4 : 0;
+  return { baseK: 0, minK: minK, maxK: maxK };
 }
 
 // Wrap a series value n according to a max stage modulo
@@ -256,11 +297,8 @@ function moduloStage(n, maxStages) {
 // 0 = Up (Sawtooth: min -> max -> min)
 // 1 = Down (Sawtooth: max -> min -> max)
 // 2 = Up-Down (Triangle: min -> max -> min smoothly)
-function stepSeriesValue(currentVal, currentDir, startN, endN, shape) {
-  var minVal = Math.min(startN, endN);
-  var maxVal = Math.max(startN, endN);
-
-  if (minVal === maxVal) {
+function stepSeriesValue(currentVal, currentDir, minVal, maxVal, shape) {
+  if (minVal >= maxVal) {
     return { val: minVal, dir: 1 };
   }
 
@@ -276,19 +314,19 @@ function stepSeriesValue(currentVal, currentDir, startN, endN, shape) {
     dir = -1;
   }
 
-  if (shape === 0) { // Up: e.g. 1, 2, 3, 1, 2, 3...
+  if (shape === 0) { // Up: e.g. min -> ... -> max -> min
     val++;
     if (val > maxVal) {
       val = minVal;
     }
     dir = 1;
-  } else if (shape === 1) { // Down: e.g. 3, 2, 1, 3, 2, 1...
+  } else if (shape === 1) { // Down: e.g. max -> ... -> min -> max
     val--;
     if (val < minVal) {
       val = maxVal;
     }
     dir = -1;
-  } else if (shape === 2) { // Up-Down (Triangle): e.g. 1, 2, 3, 2, 1, 2, 3...
+  } else if (shape === 2) { // Up-Down (Triangle)
     if (dir >= 0) {
       val++;
       if (val >= maxVal) {
@@ -307,41 +345,47 @@ function stepSeriesValue(currentVal, currentDir, startN, endN, shape) {
   return { val: val, dir: dir };
 }
 
-// Reset series counters and directions based on chosen shape and ranges
+// Reset series counters and directions based on chosen shape and ranges around Base
 function resetSeriesState() {
   var shape = GetParameter(PARAM_PROG_SHAPE);
 
-  // Octave
-  var octMin = Math.min(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
-  var octMax = Math.max(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
-  if (shape === 1) { // Down starts at top
-    currentOctaveN = octMax;
-    octaveDir = -1;
-  } else {
-    currentOctaveN = octMin;
+  // Octave (centered on Base Octave Range)
+  var oct = getOctaveBounds();
+  if (shape === 0) { // Up starts at min
+    currentOctaveN = oct.minVal;
     octaveDir = 1;
+  } else if (shape === 1) { // Down starts at max
+    currentOctaveN = oct.maxVal;
+    octaveDir = -1;
+  } else { // Up-Down starts at Base centerpoint
+    currentOctaveN = oct.base;
+    octaveDir = (oct.base < oct.maxVal) ? 1 : -1;
   }
 
-  // Subdivision
-  var subMin = Math.min(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
-  var subMax = Math.max(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
-  if (shape === 1) { // Down starts at top
-    currentSubdivN = subMax;
-    subdivDir = -1;
-  } else {
-    currentSubdivN = subMin;
+  // Subdivision (centered on Base Subdivision)
+  var sub = getSubdivBounds();
+  if (shape === 0) { // Up starts at min
+    currentSubdivN = sub.minVal;
     subdivDir = 1;
+  } else if (shape === 1) { // Down starts at max
+    currentSubdivN = sub.maxVal;
+    subdivDir = -1;
+  } else { // Up-Down starts at Base centerpoint
+    currentSubdivN = sub.base;
+    subdivDir = (sub.base < sub.maxVal) ? 1 : -1;
   }
 
-  // Velocity
-  var velMin = Math.min(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
-  var velMax = Math.max(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
-  if (shape === 1) { // Down starts at top
-    currentVelocityN = velMax;
-    velocityDir = -1;
-  } else {
-    currentVelocityN = velMin;
+  // Velocity (centered on Velocity Base, k=0)
+  var vel = getVelocityBounds();
+  if (shape === 0) { // Up starts at min
+    currentVelocityStep = vel.minK;
     velocityDir = 1;
+  } else if (shape === 1) { // Down starts at max
+    currentVelocityStep = vel.maxK;
+    velocityDir = -1;
+  } else { // Up-Down starts at Base centerpoint (k=0)
+    currentVelocityStep = 0;
+    velocityDir = (vel.maxK > 0) ? 1 : -1;
   }
 }
 
@@ -350,11 +394,12 @@ function advanceProgressions() {
   var shape = GetParameter(PARAM_PROG_SHAPE);
 
   if (GetParameter(PARAM_OCT_ACTIVE)) {
+    var oct = getOctaveBounds();
     var octResult = stepSeriesValue(
       currentOctaveN,
       octaveDir,
-      GetParameter(PARAM_OCT_START),
-      GetParameter(PARAM_OCT_END),
+      oct.minVal,
+      oct.maxVal,
       shape
     );
     currentOctaveN = octResult.val;
@@ -362,11 +407,12 @@ function advanceProgressions() {
   }
 
   if (GetParameter(PARAM_SUB_ACTIVE)) {
+    var sub = getSubdivBounds();
     var subResult = stepSeriesValue(
       currentSubdivN,
       subdivDir,
-      GetParameter(PARAM_SUB_START),
-      GetParameter(PARAM_SUB_END),
+      sub.minVal,
+      sub.maxVal,
       shape
     );
     currentSubdivN = subResult.val;
@@ -374,14 +420,15 @@ function advanceProgressions() {
   }
 
   if (GetParameter(PARAM_VEL_ACTIVE)) {
+    var vel = getVelocityBounds();
     var velResult = stepSeriesValue(
-      currentVelocityN,
+      currentVelocityStep,
       velocityDir,
-      GetParameter(PARAM_VEL_START),
-      GetParameter(PARAM_VEL_END),
+      vel.minK,
+      vel.maxK,
       shape
     );
-    currentVelocityN = velResult.val;
+    currentVelocityStep = velResult.val;
     velocityDir = velResult.dir;
   }
 }
@@ -605,7 +652,7 @@ function ProcessMIDI() {
     // C. Calculate velocity
     var velocity = noteData.velocity;
     if (GetParameter(PARAM_VEL_ACTIVE)) {
-      velocity = calculateVelocity(currentVelocityN, GetParameter(PARAM_VEL_BASE));
+      velocity = calculateVelocity(currentVelocityStep);
     }
 
     // D. Calculate Gate & Note-Off Beat
@@ -663,27 +710,30 @@ function ProcessMIDI() {
 function ParameterChanged(param, value) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
 
-  // Octave bounds
-  var minOct = Math.min(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
-  var maxOct = Math.max(GetParameter(PARAM_OCT_START), GetParameter(PARAM_OCT_END));
-  if (currentOctaveN < minOct || currentOctaveN > maxOct || param === PARAM_OCT_ACTIVE || param === PARAM_PROG_SHAPE) {
-    currentOctaveN = (shape === 1) ? maxOct : minOct;
+  // Octave bounds around Base Octave
+  var oct = getOctaveBounds();
+  if (currentOctaveN < oct.minVal || currentOctaveN > oct.maxVal || param === PARAM_OCT_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_BASE_OCTAVE) {
+    if (shape === 0) currentOctaveN = oct.minVal;
+    else if (shape === 1) currentOctaveN = oct.maxVal;
+    else currentOctaveN = oct.base;
     octaveDir = (shape === 1) ? -1 : 1;
   }
 
-  // Subdivision bounds
-  var minSub = Math.min(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
-  var maxSub = Math.max(GetParameter(PARAM_SUB_START), GetParameter(PARAM_SUB_END));
-  if (currentSubdivN < minSub || currentSubdivN > maxSub || param === PARAM_SUB_ACTIVE || param === PARAM_PROG_SHAPE) {
-    currentSubdivN = (shape === 1) ? maxSub : minSub;
+  // Subdivision bounds around Base Subdivision
+  var sub = getSubdivBounds();
+  if (currentSubdivN < sub.minVal || currentSubdivN > sub.maxVal || param === PARAM_SUB_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_BASE_SUBDIV) {
+    if (shape === 0) currentSubdivN = sub.minVal;
+    else if (shape === 1) currentSubdivN = sub.maxVal;
+    else currentSubdivN = sub.base;
     subdivDir = (shape === 1) ? -1 : 1;
   }
 
-  // Velocity bounds
-  var minVel = Math.min(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
-  var maxVel = Math.max(GetParameter(PARAM_VEL_START), GetParameter(PARAM_VEL_END));
-  if (currentVelocityN < minVel || currentVelocityN > maxVel || param === PARAM_VEL_ACTIVE || param === PARAM_PROG_SHAPE) {
-    currentVelocityN = (shape === 1) ? maxVel : minVel;
+  // Velocity bounds around Base Velocity
+  var vel = getVelocityBounds();
+  if (currentVelocityStep < vel.minK || currentVelocityStep > vel.maxK || param === PARAM_VEL_ACTIVE || param === PARAM_PROG_SHAPE || param === PARAM_VEL_BASE) {
+    if (shape === 0) currentVelocityStep = vel.minK;
+    else if (shape === 1) currentVelocityStep = vel.maxK;
+    else currentVelocityStep = 0;
     velocityDir = (shape === 1) ? -1 : 1;
   }
 
