@@ -174,7 +174,7 @@ var PluginParameters = [
   {
     name: "Subdiv Change Timing",
     type: "menu",
-    valueStrings: ["Snap to Grid", "Flow (realign each pass)"],
+    valueStrings: ["Snap to Grid", "Flow (realign each pass)", "Free (no snapping)"],
     defaultValue: 0 // Snap to Grid
   },
 
@@ -318,6 +318,13 @@ var PluginParameters = [
     numberOfSteps: 40,
     defaultValue: 0,
     unit: "%"
+  },
+
+  // --- DEBUG ---
+  {
+    name: "Debug Log",
+    type: "checkbox",
+    defaultValue: 0 // Logs settings, input notes and generated notes to the Scripter console
   }
 ];
 
@@ -363,6 +370,13 @@ var PARAM_SWING_STEPS = 30;
 var PARAM_HUMANIZE_VEL = 31;
 var PARAM_HUMANIZE_GATE = 32;
 
+var PARAM_DEBUG = 33;
+
+// Subdiv Change Timing menu
+var TIMING_SNAP = 0;
+var TIMING_FLOW = 1;
+var TIMING_FREE = 2;
+
 // ----------------------------------------------------------------------------
 // STATE
 // ----------------------------------------------------------------------------
@@ -371,7 +385,11 @@ var latchedNotes = [];         // Notes kept when latch is on
 var sequenceNotes = [];        // Expanded notes for current cycle
 var currentStepIndex = 0;
 var nextBeatToSchedule = 0;
-var pendingRealign = null;     // null | "chord" | "rate" | "beat": snap the next note to a grid before playing it
+var pendingRealign = null;
+var chordStartBeat = -1;       // Beat position of the note that started the current chord
+// A chord played up to this late after a grid line still starts on that line (its first note
+// plays immediately) instead of waiting for the next one. 1/64 note = ~31 ms at 120 BPM.
+var CHORD_LATE_TOLERANCE = 0.0625;     // null | "chord" | "rate" | "beat": snap the next note to a grid before playing it
 var swingStepCount = 0;        // Note counter for swing pairing (odd = off-beat)
 var wasPlaying = false;
 var lastBlockStartBeat = -1;   // Track previous block to detect loop wraps
@@ -440,6 +458,70 @@ for (var si = 0; si < SERIES_NAMES.length; si++) {
 }
 
 // ----------------------------------------------------------------------------
+// DEBUG LOGGING
+// ----------------------------------------------------------------------------
+// With "Debug Log" on, every line goes to the Scripter console prefixed with [SARP], in a
+// format that tests/replay.js can read back (settings, input notes, transport events) to
+// re-run the same session outside Logic and compare the generated notes.
+var beatsPerBar = 4;           // Updated from the host meter while playing (for bar|beat display)
+var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function debugOn() {
+  return GetParameter(PARAM_DEBUG) === 1;
+}
+
+function log(msg) {
+  if (debugOn()) {
+    Trace("[SARP] " + msg);
+  }
+}
+
+// Logic convention: MIDI 60 = C3
+function noteName(pitch) {
+  return NOTE_NAMES[pitch % 12] + (Math.floor(pitch / 12) - 2) + "(" + pitch + ")";
+}
+
+// "@5.250 [2|1.250]" = absolute beat, then bar | beat within the bar
+function fmtBeat(beat) {
+  var bar = Math.floor((beat - 1.0) / beatsPerBar + 1e-9);
+  var inBar = (beat - 1.0) - bar * beatsPerBar + 1.0;
+  return "@" + beat.toFixed(3) + " [" + (bar + 1) + "|" + inBar.toFixed(3) + "]";
+}
+
+function fmtParamValue(index) {
+  var p = PluginParameters[index];
+  var v = GetParameter(index);
+  if (p.type === "menu") return p.valueStrings[v];
+  if (p.type === "checkbox") return v ? "On" : "Off";
+  return String(v);
+}
+
+// One line per parameter group (groups are separated by blank comments in PluginParameters,
+// so use fixed group sizes matching the layout above)
+var SETTINGS_GROUPS = [
+  [PARAM_LATCH, PARAM_ADVANCE_TRIGGER, PARAM_PROG_SHAPE],
+  [PARAM_PATTERN, PARAM_PAT_ACTIVE, PARAM_PAT_SPREAD_DOWN, PARAM_PAT_SPREAD_UP],
+  [PARAM_BASE_OCTAVE, PARAM_OCT_ACTIVE, PARAM_OCT_SPREAD_DOWN, PARAM_OCT_SPREAD_UP],
+  [PARAM_BASE_SUBDIV, PARAM_SUB_ACTIVE, PARAM_SUB_SPREAD_DOWN, PARAM_SUB_SPREAD_UP, PARAM_SUB_TIMING],
+  [PARAM_GATE, PARAM_GATE_ACTIVE, PARAM_GATE_SPREAD_DOWN, PARAM_GATE_SPREAD_UP, PARAM_GATE_STEPS],
+  [PARAM_VEL_BASE, PARAM_VEL_ACTIVE, PARAM_VEL_SPREAD_DOWN, PARAM_VEL_SPREAD_UP, PARAM_VEL_STEPS],
+  [PARAM_SWING, PARAM_SWING_ACTIVE, PARAM_SWING_SPREAD_DOWN, PARAM_SWING_SPREAD_UP, PARAM_SWING_STEPS],
+  [PARAM_HUMANIZE_VEL, PARAM_HUMANIZE_GATE]
+];
+
+function logSettings() {
+  if (!debugOn()) return;
+  for (var g = 0; g < SETTINGS_GROUPS.length; g++) {
+    var parts = [];
+    for (var i = 0; i < SETTINGS_GROUPS[g].length; i++) {
+      var index = SETTINGS_GROUPS[g][i];
+      parts.push(PluginParameters[index].name + " = " + fmtParamValue(index));
+    }
+    log("SET " + parts.join(" ; "));
+  }
+}
+
+// ----------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // ----------------------------------------------------------------------------
 
@@ -447,6 +529,7 @@ for (var si = 0; si < SERIES_NAMES.length; si++) {
 function stopAllSoundingNotes() {
   for (var pitchStr in activeSoundingPitches) {
     if (activeSoundingPitches.hasOwnProperty(pitchStr)) {
+      log("FLUSH immediate NoteOff " + noteName(parseInt(pitchStr, 10)));
       var noteOff = new NoteOff();
       noteOff.pitch = parseInt(pitchStr, 10);
       noteOff.velocity = 64;
@@ -749,13 +832,12 @@ function rebuildSequence() {
 // ----------------------------------------------------------------------------
 
 function HandleMIDI(event) {
-  if (event instanceof NoteOn) {
-    if (event.velocity === 0) {
-      handleNoteOff(event.pitch);
-    } else {
-      handleNoteOn(event.pitch, event.velocity);
-    }
-  } else if (event instanceof NoteOff) {
+  var beat = (event.beatPos !== undefined) ? event.beatPos : GetTimingInfo().blockStartBeat;
+  if (event instanceof NoteOn && event.velocity > 0) {
+    log("IN on " + noteName(event.pitch) + " v" + event.velocity + " " + fmtBeat(beat));
+    handleNoteOn(event.pitch, event.velocity, beat);
+  } else if (event instanceof NoteOn || event instanceof NoteOff) {
+    log("IN off " + noteName(event.pitch) + " " + fmtBeat(beat));
     handleNoteOff(event.pitch);
   } else {
     // Pass CC, PitchBend, etc. directly
@@ -763,7 +845,7 @@ function HandleMIDI(event) {
   }
 }
 
-function handleNoteOn(pitch, velocity) {
+function handleNoteOn(pitch, velocity, beat) {
   var isLatch = GetParameter(PARAM_LATCH);
   var isNewChord = (heldNotes.length === 0);
 
@@ -778,6 +860,8 @@ function handleNoteOn(pitch, velocity) {
     resetSeriesState();
     currentStepIndex = 0;
     pendingRealign = "chord";
+    chordStartBeat = (beat !== undefined) ? beat : -1;
+    log("CHORD new chord: series and pattern restart");
   }
 
   // Add to held notes if not already present
@@ -834,9 +918,16 @@ function handleNoteOff(pitch) {
 function ProcessMIDI() {
   var info = GetTimingInfo();
 
+  if (info.meterNumerator && info.meterDenominator) {
+    beatsPerBar = info.meterNumerator * 4 / info.meterDenominator;
+  }
+
   // 1. Detect DAW playback start
   if (info.playing && !wasPlaying) {
     wasPlaying = true;
+    log("START " + fmtBeat(info.blockStartBeat) + " tempo " + info.tempo +
+        (info.cycling ? " cycle " + info.leftCycleBeat + "-" + info.rightCycleBeat : " no-cycle"));
+    logSettings();
     lastBlockStartBeat = info.blockStartBeat;
     resetSeriesState();
     currentStepIndex = 0;
@@ -845,11 +936,13 @@ function ProcessMIDI() {
     var initialRate = getSeriesValue("subdiv");
     alignSchedule(info.blockStartBeat, getRateGrid(initialRate), getRateBeats(initialRate));
     pendingRealign = null;
+    log("ALIGN start -> " + fmtBeat(nextBeatToSchedule) + " (" + RATES[initialRate].name + " grid)");
   }
   
   // 2. Detect DAW playback stop
   if (!info.playing && wasPlaying) {
     wasPlaying = false;
+    log("STOP " + fmtBeat(info.blockStartBeat));
     lastBlockStartBeat = -1;
     stopAllSoundingNotes();
     return;
@@ -858,11 +951,22 @@ function ProcessMIDI() {
   if (!info.playing) return;
 
   // 3. Detect DAW Loop Wrap or Backward Jump (e.g. 8-bar loop cycling)
+  // Restart like a transport start, so every loop pass plays the same. If the first block after
+  // the wrap starts just past the loop start (Logic's block can straddle the loop end), align
+  // from the loop start so its downbeat still plays (immediately).
   if (lastBlockStartBeat >= 0 && info.blockStartBeat < lastBlockStartBeat) {
     stopAllSoundingNotes();
+    resetSeriesState();
+    currentStepIndex = 0;
+    rebuildSequence();
     var wrapRate = getSeriesValue("subdiv");
-    alignSchedule(info.blockStartBeat, getRateGrid(wrapRate), getRateBeats(wrapRate));
+    var wrapFrom = info.blockStartBeat;
+    if (info.cycling && info.blockStartBeat >= info.leftCycleBeat && info.blockStartBeat - info.leftCycleBeat < CHORD_LATE_TOLERANCE) {
+      wrapFrom = info.leftCycleBeat;
+    }
+    alignSchedule(wrapFrom, getRateGrid(wrapRate), getRateBeats(wrapRate));
     pendingRealign = null;
+    log("LOOP wrap/jump back -> " + fmtBeat(nextBeatToSchedule) + " (" + RATES[wrapRate].name + " grid)");
   }
   lastBlockStartBeat = info.blockStartBeat;
   pruneSoundingNotes(info.blockStartBeat);
@@ -876,17 +980,29 @@ function ProcessMIDI() {
   }
 
   // 4. Catch up if transport jumped forward or got out of range
-  // (the schedule can legitimately run one slowest step, 6 beats, past the block)
-  if (nextBeatToSchedule < info.blockStartBeat || nextBeatToSchedule > info.blockEndBeat + 8.0) {
+  // (the schedule can legitimately run one slowest step, 6 beats, past the block, and be up to
+  // CHORD_LATE_TOLERANCE behind it after a late chord or a loop wrap; such a note plays immediately)
+  if (nextBeatToSchedule < info.blockStartBeat - CHORD_LATE_TOLERANCE || nextBeatToSchedule > info.blockEndBeat + 8.0) {
     var catchRate = getSeriesValue("subdiv");
     alignSchedule(info.blockStartBeat, getRateGrid(catchRate), getRateBeats(catchRate));
     pendingRealign = null;
+    log("ALIGN catch-up (transport jump) -> " + fmtBeat(nextBeatToSchedule));
   }
 
-  // A new chord starts from now, not from where the previous chord's schedule left off
-  // (which may be beyond this block); it is snapped to the grid in the loop below
+  // A new chord starts from where it was played, not from where the previous chord's schedule
+  // left off (which may be beyond this block); it is snapped forward to the grid in the loop
+  // below. Starting slightly before the note's beat lets a chord that arrived just after a grid
+  // line (or after the block containing it was processed) still start on that line.
+  // The note's own beat is only trusted when it is within the tolerance before this block:
+  // Logic can deliver a loop-start note (e.g. beat 9.0) in the block that crosses the loop end
+  // (beat ~41), and lining up from 9.0 there would put the schedule 32 beats behind.
   if (pendingRealign === "chord") {
-    nextBeatToSchedule = info.blockStartBeat;
+    var chordBeat = info.blockStartBeat;
+    if (chordStartBeat >= 0 && chordStartBeat <= info.blockStartBeat &&
+        info.blockStartBeat - chordStartBeat <= CHORD_LATE_TOLERANCE) {
+      chordBeat = chordStartBeat;
+    }
+    nextBeatToSchedule = chordBeat - CHORD_LATE_TOLERANCE;
   }
 
   // 5. Schedule notes within the current audio block
@@ -902,16 +1018,23 @@ function ProcessMIDI() {
     //   Snap to Grid: every note snaps forward to its own rate's grid, keeping the phrase anchored
     //                 to the beat (rate changes may leave a gap).
     //   Flow:         notes follow each other with no gaps (each note starts when the previous
-    //                 note's step ends), so rate changes keep their exact rhythm; the schedule
-    //                 snaps only when requested.
-    // Requested snaps (both modes):
+    //                 note's step ends), and realign to the beat when the subdivision series
+    //                 completes a pass.
+    //   Free:         notes follow each other with no gaps and never realign on their own.
+    // Requested snaps (all modes):
     //   "chord": to this rate's grid, from now (a new chord ignores where the old one left off)
     //   "rate":  to this rate's grid (rate controls changed by hand)
     //   "beat":  to the beat, or this rate's grid if coarser (Flow: subdivision series completed a pass)
-    var snapToGrid = (GetParameter(PARAM_SUB_TIMING) === 0);
+    var timingMode = GetParameter(PARAM_SUB_TIMING);
+    var snapToGrid = (timingMode === TIMING_SNAP);
     if (pendingRealign || snapToGrid) {
       var gridLength = (pendingRealign === "beat") ? Math.max(1.0, stepGrid) : stepGrid;
+      var beforeAlign = nextBeatToSchedule;
       alignSchedule(nextBeatToSchedule, gridLength, stepBeatDuration);
+      if (pendingRealign || nextBeatToSchedule - beforeAlign > 1e-6) {
+        log("ALIGN " + (pendingRealign || "snap") + " " + beforeAlign.toFixed(3) + " -> " + fmtBeat(nextBeatToSchedule) +
+            " (grid " + gridLength.toFixed(4) + " beats)");
+      }
       pendingRealign = null;
       if (nextBeatToSchedule >= info.blockEndBeat) {
         break; // Scheduled note belongs to the next audio block
@@ -938,7 +1061,8 @@ function ProcessMIDI() {
 
     // D. Apply swing: the grid pointer stays on the straight grid; only this note's timing moves
     var swing = getSwingTiming(swingStepCount % 2 === 1, stepBeatDuration, getSeriesValue("swing"));
-    var noteOnBeat = nextBeatToSchedule + swing.offset;
+    // (never in the past: a chord that started on a grid line just before this block plays now)
+    var noteOnBeat = Math.max(nextBeatToSchedule + swing.offset, info.blockStartBeat);
 
     // E. Calculate Gate (series, then humanize) & Note-Off Beat, relative to the swung slot
     var gatePercent = getSeriesValue("gate") + randomOffset(GetParameter(PARAM_HUMANIZE_GATE));
@@ -968,6 +1092,15 @@ function ProcessMIDI() {
       activeSoundingPitches[noteData.pitch] = (prevOffBeat !== undefined) ? Math.max(prevOffBeat, noteOffBeat) : noteOffBeat;
     }
 
+    if (debugOn()) {
+      log((playNote ? "OUT " : "SKIP (past loop end) ") + noteName(noteData.pitch) + " v" + velocity + " " + fmtBeat(noteOnBeat) +
+          " len " + (noteOffBeat - noteOnBeat).toFixed(3) +
+          " | rate " + RATES[subdivN].name + " oct " + getSeriesValue("octave") +
+          " pat " + PluginParameters[PARAM_PATTERN].valueStrings[pattern] +
+          " gate " + Math.round(gate * 100) + "% swing " + getSeriesValue("swing") + "%" +
+          " | step " + (currentStepIndex + 1) + "/" + sequenceNotes.length);
+    }
+
     // G. Advance step index
     var advanceTrigger = GetParameter(PARAM_ADVANCE_TRIGGER); // 0 = Per Cycle, 1 = Per Step
     var isCycleEnd = false;
@@ -982,10 +1115,22 @@ function ProcessMIDI() {
     nextBeatToSchedule += stepBeatDuration;
     swingStepCount++;
 
+    // Safety net: at most one note is played "immediately" (late start). If the schedule is
+    // still behind this block, jump forward and snap to the grid instead of firing every
+    // missed step at once (which stacks notes into one loud burst).
+    if (nextBeatToSchedule < info.blockStartBeat) {
+      log("ALIGN behind " + nextBeatToSchedule.toFixed(3) + " -> resync from " + fmtBeat(info.blockStartBeat));
+      nextBeatToSchedule = info.blockStartBeat;
+      pendingRealign = "rate";
+    }
+
     // I. Advance arithmetic series; realign to the beat when the subdivision series starts over
     if (advanceTrigger === 1 || isCycleEnd) { // Per Note Step, or Per Arp Cycle at cycle end
       var completed = advanceProgressions(isCycleEnd);
-      if (completed.subdiv && !snapToGrid) {
+      if (completed.subdiv) {
+        log("PASS subdivision series completed a pass" + (timingMode === TIMING_FLOW ? " -> realign to beat" : ""));
+      }
+      if (completed.subdiv && timingMode === TIMING_FLOW) {
         pendingRealign = "beat";
       }
       rebuildSequence();
@@ -999,6 +1144,9 @@ function ProcessMIDI() {
 
 function ParameterChanged(param, value) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
+  if (wasPlaying && param !== PARAM_DEBUG) {
+    log("PARAM " + PluginParameters[param].name + " = " + fmtParamValue(param) + " " + fmtBeat(GetTimingInfo().blockStartBeat));
+  }
 
   // Rate controls changed by hand: snap the next note to the new rate's grid
   var sub = SERIES.subdiv;

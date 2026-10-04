@@ -28,8 +28,9 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
 - **Subdiv Change Timing**: How notes are timed when the subdivision changes:
   - `Snap to Grid` (default): each note snaps forward to its own rate's grid, keeping phrases anchored to the beat (a rate change can leave a gap).
   - `Flow (realign each pass)`: notes follow each other with no gaps, so progressions keep their exact rhythm (e.g. 1/16, 1/8, 1/4, 1/2 back to back), then realign to the next beat each time the subdivision series completes a pass. Can sound syncopated.
-  - In both modes the schedule snaps to the grid when the transport starts, the loop wraps, a new chord is played, or rate controls are changed by hand.
-- **Chord Restart**: Playing a new chord (after releasing all keys, or replacing a latched chord) restarts the series and the pattern from the beginning. Adding notes to a held chord does not.
+  - `Free (no snapping)`: notes follow each other with no gaps and never realign on their own; phrases can drift against the bar.
+  - In all modes the schedule snaps to the grid when the transport starts, the loop wraps, a new chord is played, or rate controls are changed by hand. A chord played just after a grid line (within a 1/64 note) still starts on that line.
+- **Chord & Loop Restart**: Playing a new chord (after releasing all keys, or replacing a latched chord) restarts the series and the pattern from the beginning. Adding notes to a held chord does not. Each DAW loop pass also restarts them, so every pass plays the same, and the loop's downbeat is played even when Logic's audio block straddles the loop end.
 - **Stuck Note Protection**: Sounding notes are flushed on DAW cycle wraps, backward jumps, transport stop, and when the chord is released.
 
 ## Setup in Logic Pro
@@ -37,6 +38,17 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
 2. In the **MIDI FX** slot of the channel strip, select **Scripter**.
 3. Open Scripter editor, paste the contents of `progressive_arp.js`, and click **Run Script**.
 4. Start Logic's transport — the arpeggiator only plays while the host is playing.
+
+## Debug Log & Replay
+Turn on **Debug Log** (last control) *before* starting Logic's transport. The Scripter console then shows `[SARP]` lines: the settings (`SET`), every input note (`IN`), every generated note with its rate, octave, pattern, gate and step (`OUT`), grid alignments (`ALIGN`), series passes (`PASS`), parameter changes, loop wraps and transport start/stop. Positions are shown as `@absolute-beat [bar|beat]`.
+
+To check a session for bugs, copy the console output to a file (or the clipboard) and replay it outside Logic:
+
+```bash
+pbpaste | node tests/replay.js
+```
+
+The replay re-creates the settings and input notes in the test mock and compares the generated notes with Logic's, reporting the first difference. A difference means either a bug in the mock's assumptions about Logic or timing that depends on Logic's audio blocks.
 
 ## Tests
 Scripter has no test framework, so `tests/scripter_mock.js` fakes the parts of the Scripter API the scripts use (`NoteOn`/`NoteOff`, `GetParameter`, `GetTimingInfo`, `Trace`) and loads the script file unmodified in Node. Tests can call the script's functions directly or simulate host playback (blocks of `ProcessMIDI`, cycle wraps, transport stop) and inspect the MIDI it sends.

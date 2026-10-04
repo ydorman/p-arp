@@ -17,6 +17,7 @@ function loadScript(relativePath, options = {}) {
 
   // Everything sent by the script, in send order: { type, pitch, velocity, beat }
   const events = [];
+  let straddle = false;
   const traces = [];
   const params = [];
   let timing = {
@@ -24,6 +25,8 @@ function loadScript(relativePath, options = {}) {
     blockStartBeat: 1.0,
     blockEndBeat: 1.0,
     tempo: 120,
+    meterNumerator: 4,
+    meterDenominator: 4,
     cycling: false,
     leftCycleBeat: 1.0,
     rightCycleBeat: 5.0,
@@ -90,16 +93,18 @@ function loadScript(relativePath, options = {}) {
       if (typeof ctx.ParameterChanged === "function") ctx.ParameterChanged(index, value);
     },
 
-    noteOn(pitch, velocity = 100) {
+    noteOn(pitch, velocity = 100, beat = timing.blockEndBeat) {
       const e = new NoteOn();
       e.pitch = pitch;
       e.velocity = velocity;
+      e.beatPos = beat;
       ctx.HandleMIDI(e);
     },
 
-    noteOff(pitch) {
+    noteOff(pitch, beat = timing.blockEndBeat) {
       const e = new NoteOff();
       e.pitch = pitch;
+      e.beatPos = beat;
       ctx.HandleMIDI(e);
     },
 
@@ -114,9 +119,13 @@ function loadScript(relativePath, options = {}) {
       while (remaining > 1e-9) {
         let start = timing.blockEndBeat;
         if (timing.cycling && start >= timing.rightCycleBeat - 1e-9) {
-          start = timing.leftCycleBeat; // DAW cycle wrap
+          // DAW cycle wrap; with straddle, the previous block ran past the loop end and the
+          // next block starts the same distance past the loop start (as Logic appears to do)
+          start = timing.leftCycleBeat + (straddle ? start - timing.rightCycleBeat : 0);
         }
-        const end = Math.min(start + blockBeats, timing.cycling ? timing.rightCycleBeat : Infinity);
+        // The last block ends exactly at the requested position
+        let end = start + Math.min(blockBeats, remaining);
+        if (timing.cycling && !straddle) end = Math.min(end, timing.rightCycleBeat);
         timing.blockStartBeat = start;
         timing.blockEndBeat = end;
         remaining -= end - start;
@@ -130,10 +139,12 @@ function loadScript(relativePath, options = {}) {
       ctx.ProcessMIDI();
     },
 
-    setCycle(left, right) {
+    /** Loop between left and right. straddle: audio blocks may cross the loop end. */
+    setCycle(left, right, options = {}) {
       timing.cycling = true;
       timing.leftCycleBeat = left;
       timing.rightCycleBeat = right;
+      straddle = !!options.straddle;
     },
 
     /** Move the playhead (only while stopped). */

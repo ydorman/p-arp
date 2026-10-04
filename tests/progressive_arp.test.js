@@ -8,7 +8,7 @@ const SCRIPT = "progressive_arp.js";
 const PATTERN = { UP: 0, DOWN: 1, UP_DOWN: 2, DOWN_UP: 3, AS_PLAYED: 4, RANDOM: 5 };
 const SHAPE = { UP: 0, DOWN: 1, TRIANGLE: 2 };
 const TRIGGER = { CYCLE: 0, STEP: 1 };
-const TIMING = { SNAP: 0, FLOW: 1 };
+const TIMING = { SNAP: 0, FLOW: 1, FREE: 2 };
 // Rate menu indices, looked up by name from the script's RATES table
 const RATE = (() => {
   const { ctx } = loadScript(SCRIPT);
@@ -834,5 +834,253 @@ describe("dotted and triplet rates", () => {
     host.noteOn(60);
     host.play(13);
     assert.deepEqual(beats(host.noteOns()), [1, 7, 13]);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Free timing, late chords, debug log & replay
+// ----------------------------------------------------------------------------
+
+describe("Free timing mode", () => {
+  // The reported single-note case: Up shape, Up/Down pattern, 1 octave, 1/8 with spread (+) 1
+  const SINGLE = Object.assign({}, PLAIN, {
+    PARAM_PATTERN: PATTERN.UP_DOWN, PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 1,
+    PARAM_PROG_SHAPE: SHAPE.UP,
+  });
+  const onsets = (timing) => {
+    const host = arp(Object.assign({}, SINGLE, { PARAM_SUB_TIMING: timing }));
+    host.noteOn(48);
+    host.play(3);
+    return beats(before(host.noteOns(), 3.5));
+  };
+
+  it("Snap and Flow keep every note on the 1/8 grid for a single note", () => {
+    assert.deepEqual(onsets(TIMING.SNAP), [1, 1.5, 2, 2.5, 3, 3.5].filter((b) => b < 3.5));
+    assert.deepEqual(onsets(TIMING.FLOW), [1, 1.5, 2, 2.5, 3]);
+  });
+
+  it("Free never snaps: 1/8 and 1/16 alternate back to back", () => {
+    assert.deepEqual(onsets(TIMING.FREE), [1, 1.5, 1.75, 2.25, 2.5, 3, 3.25]);
+  });
+
+  it("Free still snaps a new chord to the grid", () => {
+    const host = arp(Object.assign({}, SINGLE, { PARAM_SUB_TIMING: TIMING.FREE }));
+    host.play(0.3);
+    host.noteOn(48, 100, 1.3);
+    host.play(1);
+    assert.equal(host.noteOns()[0].beat, 1.5);
+  });
+});
+
+describe("late chords", () => {
+  it("a chord on a grid line that arrives after its block was processed still starts on that line", () => {
+    const host = arp(PLAIN);
+    host.play(0.03); // first audio block (1.0 - 1.03) already processed
+    host.noteOn(60, 100, 1.0); // ...but the note was played at 1.0
+    host.play(2);
+    const ons = beats(before(host.noteOns(), 3));
+    assert.ok(ons[0] >= 1.0 && ons[0] <= 1.03, `first note at ${ons[0]} (played immediately, not at 1.5)`);
+    assert.deepEqual(ons.slice(1), [1.5, 2, 2.5], "grid timing is kept after the late start");
+  });
+
+  it("a chord played well after a grid line waits for the next one", () => {
+    const host = arp(PLAIN);
+    host.play(0.2);
+    host.noteOn(60, 100, 1.2);
+    host.play(1);
+    assert.equal(host.noteOns()[0].beat, 1.5);
+  });
+});
+
+describe("debug log", () => {
+  function session(debug) {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_DEBUG: debug }));
+    host.noteOn(60, 90, 1.0);
+    host.play(1);
+    host.noteOff(60, 2.0);
+    host.stop();
+    return host.traces;
+  }
+
+  it("is silent when off", () => {
+    assert.deepEqual(session(0), []);
+  });
+
+  it("logs settings, input, output and transport when on", () => {
+    const traces = session(1);
+    assert.ok(traces.every((t) => t.startsWith("[SARP] ")));
+    const kinds = traces.map((t) => t.slice(7).split(" ")[0]);
+    for (const kind of ["START", "SET", "ALIGN", "OUT", "IN", "STOP"]) assert.ok(kinds.includes(kind), `missing ${kind}`);
+    assert.ok(traces.some((t) => t.includes("SET Base Subdivision = 1/8")));
+    assert.ok(traces.some((t) => t.includes("OUT C3(60) v90 @1.000 [1|1.000] len 0.400 | rate 1/8")));
+    assert.ok(traces.some((t) => t.includes("IN off C3(60) @2.000 [1|2.000]")));
+  });
+
+  it("shows bar | beat positions", () => {
+    const { ctx } = arp();
+    assert.equal(ctx.fmtBeat(1), "@1.000 [1|1.000]");
+    assert.equal(ctx.fmtBeat(5.25), "@5.250 [2|1.250]");
+    assert.equal(ctx.fmtBeat(8.5), "@8.500 [2|4.500]");
+  });
+});
+
+describe("replay tool", () => {
+  const { execFileSync } = require("node:child_process");
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+
+  function logOf(build) {
+    const host = arp(Object.assign({ PARAM_DEBUG: 1 }, PLAIN, build.params));
+    build.run(host);
+    return host.traces.map((t) => "10:15:00 " + t).join("\n"); // Logic console may prefix lines
+  }
+  function replay(text) {
+    const file = path.join(os.tmpdir(), `sarp-replay-${process.pid}-${Math.random()}.log`);
+    fs.writeFileSync(file, text);
+    try {
+      return { ok: true, out: execFileSync("node", [path.join(__dirname, "replay.js"), file], { encoding: "utf8" }) };
+    } catch (e) {
+      return { ok: false, out: e.stdout };
+    } finally {
+      fs.unlinkSync(file);
+    }
+  }
+
+  const SESSION = {
+    params: { PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_UP: 2, PARAM_PROG_SHAPE: SHAPE.TRIANGLE, PARAM_SWING: 60 },
+    run(host) {
+      host.setCycle(1, 9);
+      host.play(0.3);
+      [60, 64, 67].forEach((n) => host.noteOn(n, 90));
+      host.play(3);
+      [60, 64, 67].forEach((n) => host.noteOff(n));
+      host.play(0.7);
+      host.setParam(host.ctx.PARAM_SUB_TIMING, TIMING.FLOW);
+      [62, 65].forEach((n) => host.noteOn(n, 100));
+      host.play(7);
+      host.stop();
+    },
+  };
+
+  it("reproduces a logged session (chords, parameter change, loop wrap)", () => {
+    const result = replay(logOf(SESSION));
+    assert.ok(result.ok, result.out);
+    assert.match(result.out, /All notes match/);
+  });
+
+  it("reports the first differing note", () => {
+    const text = logOf(SESSION).replace(/OUT E3\(64\) v90 @[\d.]+/, "OUT E3(64) v90 @99.000");
+    const result = replay(text);
+    assert.equal(result.ok, false);
+    assert.match(result.out, /First difference at note 2/);
+  });
+});
+
+describe("loop wrap", () => {
+  const SERIES_ON = Object.assign({}, PLAIN, {
+    PARAM_PATTERN: PATTERN.DOWN, PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 1,
+  });
+
+  for (const straddle of [false, true]) {
+    it(`restarts the series and pattern, and plays the loop's downbeat${straddle ? " (block crosses the loop end)" : ""}`, () => {
+      const host = arp(SERIES_ON);
+      // 1/8 x3 (1, 1.5, 2), then 1/16 from 2.5: the loop ends mid-pattern on 1/16
+      host.setCycle(1, 2.75, { straddle });
+      [60, 64, 67].forEach((p) => host.noteOn(p));
+      host.play(1.75);
+      const firstPass = host.noteOns().length;
+      host.play(2);
+      const after = host.noteOns().slice(firstPass);
+      assert.ok(after[0].beat >= 1 && after[0].beat < 1.03, `first note after the wrap at ${after[0].beat}`);
+      assert.equal(after[0].pitch, 67, "pattern restarts from the top (Down)");
+      // series restarts at 1/8: second note half a beat after the downbeat
+      assert.equal(after[1].beat, 1.5);
+    });
+  }
+
+  it("the loop's second pass plays the same notes as the first", () => {
+    const host = arp(SERIES_ON);
+    host.setCycle(1, 5, { straddle: true });
+    [60, 64, 67].forEach((p) => host.noteOn(p));
+    host.play(4);
+    const first = host.noteOns().map((n) => `${n.pitch}@${n.beat}`);
+    host.events.length = 0;
+    host.play(4);
+    const second = host.noteOns().map((n) => `${n.pitch}@${r4(n.beat)}`);
+    // the downbeat after the wrap plays as soon as the straddling block allows; compare the rest exactly
+    assert.deepEqual(second.slice(1), first.slice(1));
+    assert.equal(second[0].split("@")[0], first[0].split("@")[0]);
+  });
+
+  it("logs the immediate note-offs it sends (FLUSH)", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_DEBUG: 1 }));
+    host.noteOn(60, 100, 1.0);
+    host.play(0.2);
+    host.noteOff(60, 1.2);
+    assert.ok(host.traces.some((t) => t.includes("FLUSH immediate NoteOff C3(60)")));
+  });
+});
+
+describe("note bursts (regression: +10 dB pop on the second loop pass)", () => {
+  it("a loop-start note delivered in the block that crosses the loop end does not stack notes", () => {
+    const host = arp(Object.assign({}, PLAIN, {
+      PARAM_PATTERN: PATTERN.DOWN, PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 1,
+    }));
+    host.setCycle(9, 41, { straddle: true });
+    host.locate(9);
+    host.noteOn(48, 94, 9.0);
+    host.play(31.99);
+    host.noteOff(48, 40.881);
+    host.noteOn(48, 94, 9.0); // Logic delivers the region's loop-start note before the wrap
+    const before = host.events.length;
+    host.play(1.03);
+    const ons = host.events.slice(before).filter((e) => e.type === "NoteOn");
+    assert.equal(ons.length, 3, `expected 3 notes, got ${ons.map((e) => r4(e.beat))}`);
+    assert.ok(ons[0].beat >= 9 && ons[0].beat < 9.02, `downbeat right after the wrap, got ${ons[0].beat}`);
+    assert.deepEqual(ons.slice(1).map((e) => e.beat), [9.5, 10], "then the grid");
+  });
+
+  it("never starts two notes at the same instant (randomized sessions)", () => {
+    const rand = seededRandom(42);
+    const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+    for (let session = 0; session < 60; session++) {
+      const host = arp({
+        PARAM_PATTERN: pick([PATTERN.UP, PATTERN.DOWN, PATTERN.UP_DOWN]),
+        PARAM_BASE_OCTAVE: pick([1, 2]),
+        PARAM_BASE_SUBDIV: pick([RATE["1/4"], RATE["1/8"], RATE["1/16 triplet"], RATE["1/32"], RATE["1/128"]]),
+        PARAM_SUB_ACTIVE: pick([0, 1]),
+        PARAM_SUB_SPREAD_UP: pick([0, 1, 2]),
+        PARAM_SUB_TIMING: pick([TIMING.SNAP, TIMING.FLOW, TIMING.FREE]),
+        PARAM_ADVANCE_TRIGGER: pick([TRIGGER.CYCLE, TRIGGER.STEP]),
+        PARAM_SWING: pick([50, 62]),
+      });
+      const left = 1, right = 1 + pick([4, 8, 9.5]);
+      host.setCycle(left, right, { straddle: rand() < 0.5 });
+      const blockBeats = pick([0.0151, 0.0232, 0.05]);
+      let pass = 0, lastStart = -1;
+      const passOf = [];
+      for (let step = 0; step < 40; step++) {
+        const chord = [48 + Math.floor(rand() * 12), 60 + Math.floor(rand() * 12)];
+        // note positions: current, stale (e.g. loop start), or slightly late
+        const now = host.timing.blockEndBeat;
+        const beatPos = pick([now, left, now - 0.03, now - 5]);
+        if (rand() < 0.7) chord.forEach((p) => host.noteOn(p, 90, beatPos));
+        host.play(rand() * 3, { blockBeats });
+        if (rand() < 0.5) chord.forEach((p) => host.noteOff(p, host.timing.blockEndBeat));
+      }
+      host.stop();
+      // Group NoteOns by loop pass (the playhead jumps back on each wrap) and check for stacking
+      const seen = new Set();
+      let prevBeat = -Infinity;
+      for (const e of host.events) {
+        if (e.type !== "NoteOn") continue;
+        if (e.beat < prevBeat - 1) pass++;
+        prevBeat = e.beat;
+        const key = `${pass}:${e.beat.toFixed(6)}`;
+        assert.ok(!seen.has(key), `session ${session}: two NoteOns at beat ${e.beat} (pass ${pass})`);
+        seen.add(key);
+      }
+    }
   });
 });
