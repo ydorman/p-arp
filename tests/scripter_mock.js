@@ -18,6 +18,7 @@ function loadScript(relativePath, options = {}) {
   // Everything sent by the script, in send order: { type, pitch, velocity, beat }
   const events = [];
   let straddle = false;
+  let loopPass = 0; // number of DAW cycle wraps so far (recorded on every sent event)
   const traces = [];
   const params = [];
   let timing = {
@@ -40,7 +41,7 @@ function loadScript(relativePath, options = {}) {
       events.push(this._record(beat));
     }
     _record(beat) {
-      return { type: this.constructor.name, pitch: this.pitch, velocity: this.velocity, beat };
+      return { type: this.constructor.name, pitch: this.pitch, velocity: this.velocity, beat, pass: loopPass };
     }
   }
   class NoteOn extends Event {
@@ -122,6 +123,7 @@ function loadScript(relativePath, options = {}) {
           // DAW cycle wrap; with straddle, the previous block ran past the loop end and the
           // next block starts the same distance past the loop start (as Logic appears to do)
           start = timing.leftCycleBeat + (straddle ? start - timing.rightCycleBeat : 0);
+          loopPass++;
         }
         // The last block ends exactly at the requested position
         let end = start + Math.min(blockBeats, remaining);

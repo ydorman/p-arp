@@ -22,6 +22,11 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - `Up` (sawtooth: min → max, then jump back to min)
   - `Down` (sawtooth: max → min, then jump back to max)
   - `Up-Down (Triangle)` (starts at base → max → min → base …)
+- **Link Series**: How active series move relative to each other:
+  - `Off` (default): each series steps one value at a time and wraps at its own length, so series of different lengths drift apart.
+  - `Shared Phase`: one shared position walks the progression shape; each series maps it onto its own range, so all reach their min, base and max together (shorter ranges hold values). E.g. velocity walking 9 steps while octave goes 1,1,1,1,1,2,2,3,3.
+  - `Restart Together`: each series steps on its own, but all restart when the longest one completes its pass.
+- **Global Range**: A master knob (0–100%, default 100%) that scales every series' `Spread (-)` and `Spread (+)` at once, so one gesture widens or narrows the whole progression (0% = everything at its base). Pattern, octave and rate spreads round to whole steps; gate, velocity and swing keep their step count and compress the distance. Works in every Link mode.
 - **Advance Trigger**: Advance the series once per full arp cycle, or on every note step. The Pattern series always advances per arp cycle (switching patterns on every note just scrambles them).
 - **Humanize**: `Humanize Velocity` (±0–40) and `Humanize Gate` (±0–40%) add random variation to each note on top of the series (velocity clamped to 1–127, gate to 1–100%). Timing stays on the grid.
 - **Arp Patterns**: Up, Down, Up/Down, Down/Up, As Played, Random; chord latch.

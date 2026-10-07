@@ -82,6 +82,21 @@ var PluginParameters = [
     valueStrings: ["Up", "Down", "Up-Down (Triangle)"],
     defaultValue: 0 // Up
   },
+  {
+    name: "Link Series",
+    type: "menu",
+    valueStrings: ["Off", "Shared Phase", "Restart Together"],
+    defaultValue: 0 // Off: each series moves on its own
+  },
+  {
+    name: "Global Range",
+    type: "lin",
+    minValue: 0,
+    maxValue: 100,
+    numberOfSteps: 100,
+    defaultValue: 100, // scales every series' Spread (-) and (+): 100% = as set, 0% = stays at base
+    unit: "%"
+  },
 
   // --- PATTERN SERIES GAUGE ---
   {
@@ -332,45 +347,52 @@ var PluginParameters = [
 var PARAM_LATCH = 0;
 var PARAM_ADVANCE_TRIGGER = 1;
 var PARAM_PROG_SHAPE = 2;
+var PARAM_LINK = 3;
+var PARAM_GLOBAL_RANGE = 4;
 
-var PARAM_PATTERN = 3;
-var PARAM_PAT_ACTIVE = 4;
-var PARAM_PAT_SPREAD_DOWN = 5;
-var PARAM_PAT_SPREAD_UP = 6;
+var PARAM_PATTERN = 5;
+var PARAM_PAT_ACTIVE = 6;
+var PARAM_PAT_SPREAD_DOWN = 7;
+var PARAM_PAT_SPREAD_UP = 8;
 
-var PARAM_BASE_OCTAVE = 7;
-var PARAM_OCT_ACTIVE = 8;
-var PARAM_OCT_SPREAD_DOWN = 9;
-var PARAM_OCT_SPREAD_UP = 10;
+var PARAM_BASE_OCTAVE = 9;
+var PARAM_OCT_ACTIVE = 10;
+var PARAM_OCT_SPREAD_DOWN = 11;
+var PARAM_OCT_SPREAD_UP = 12;
 
-var PARAM_BASE_SUBDIV = 11;
-var PARAM_SUB_ACTIVE = 12;
-var PARAM_SUB_SPREAD_DOWN = 13;
-var PARAM_SUB_SPREAD_UP = 14;
-var PARAM_SUB_TIMING = 15;
+var PARAM_BASE_SUBDIV = 13;
+var PARAM_SUB_ACTIVE = 14;
+var PARAM_SUB_SPREAD_DOWN = 15;
+var PARAM_SUB_SPREAD_UP = 16;
+var PARAM_SUB_TIMING = 17;
 
-var PARAM_GATE = 16;
-var PARAM_GATE_ACTIVE = 17;
-var PARAM_GATE_SPREAD_DOWN = 18;
-var PARAM_GATE_SPREAD_UP = 19;
-var PARAM_GATE_STEPS = 20;
+var PARAM_GATE = 18;
+var PARAM_GATE_ACTIVE = 19;
+var PARAM_GATE_SPREAD_DOWN = 20;
+var PARAM_GATE_SPREAD_UP = 21;
+var PARAM_GATE_STEPS = 22;
 
-var PARAM_VEL_BASE = 21;
-var PARAM_VEL_ACTIVE = 22;
-var PARAM_VEL_SPREAD_DOWN = 23;
-var PARAM_VEL_SPREAD_UP = 24;
-var PARAM_VEL_STEPS = 25;
+var PARAM_VEL_BASE = 23;
+var PARAM_VEL_ACTIVE = 24;
+var PARAM_VEL_SPREAD_DOWN = 25;
+var PARAM_VEL_SPREAD_UP = 26;
+var PARAM_VEL_STEPS = 27;
 
-var PARAM_SWING = 26;
-var PARAM_SWING_ACTIVE = 27;
-var PARAM_SWING_SPREAD_DOWN = 28;
-var PARAM_SWING_SPREAD_UP = 29;
-var PARAM_SWING_STEPS = 30;
+var PARAM_SWING = 28;
+var PARAM_SWING_ACTIVE = 29;
+var PARAM_SWING_SPREAD_DOWN = 30;
+var PARAM_SWING_SPREAD_UP = 31;
+var PARAM_SWING_STEPS = 32;
 
-var PARAM_HUMANIZE_VEL = 31;
-var PARAM_HUMANIZE_GATE = 32;
+var PARAM_HUMANIZE_VEL = 33;
+var PARAM_HUMANIZE_GATE = 34;
 
-var PARAM_DEBUG = 33;
+var PARAM_DEBUG = 35;
+
+// Link Series menu
+var LINK_OFF = 0;
+var LINK_SHARED = 1;
+var LINK_RESTART = 2;
 
 // Subdiv Change Timing menu
 var TIMING_SNAP = 0;
@@ -453,6 +475,13 @@ var SERIES_NAMES = ["pattern", "octave", "subdiv", "gate", "velocity", "swing"];
 
 // Series state (for Up-Down / Triangle bounce): { name: { pos, dir } }
 var seriesState = {};
+
+// Link Series state.
+// Shared Phase: a master position from -down..+up (0 = every series at its base), walked with
+//   the progression shape; each series maps it onto its own range, so all reach their min, base
+//   and max together (series with a shorter range hold values).
+// Restart Together: count of advances; all series restart when the longest pass completes.
+var linkState = { pos: 0, dir: 1, count: 0 };
 for (var si = 0; si < SERIES_NAMES.length; si++) {
   seriesState[SERIES_NAMES[si]] = { pos: 0, dir: 1 };
 }
@@ -499,7 +528,7 @@ function fmtParamValue(index) {
 // One line per parameter group (groups are separated by blank comments in PluginParameters,
 // so use fixed group sizes matching the layout above)
 var SETTINGS_GROUPS = [
-  [PARAM_LATCH, PARAM_ADVANCE_TRIGGER, PARAM_PROG_SHAPE],
+  [PARAM_LATCH, PARAM_ADVANCE_TRIGGER, PARAM_PROG_SHAPE, PARAM_LINK, PARAM_GLOBAL_RANGE],
   [PARAM_PATTERN, PARAM_PAT_ACTIVE, PARAM_PAT_SPREAD_DOWN, PARAM_PAT_SPREAD_UP],
   [PARAM_BASE_OCTAVE, PARAM_OCT_ACTIVE, PARAM_OCT_SPREAD_DOWN, PARAM_OCT_SPREAD_UP],
   [PARAM_BASE_SUBDIV, PARAM_SUB_ACTIVE, PARAM_SUB_SPREAD_DOWN, PARAM_SUB_SPREAD_UP, PARAM_SUB_TIMING],
@@ -613,10 +642,19 @@ function getSeriesBase(name) {
 }
 
 // Position bounds of a series around its base: { minPos, basePos, maxPos }
+// A series' spread below / above its base, scaled by the Global Range knob.
+// Range series move in whole values, so their scaled spread is rounded to whole steps.
+function getEffectiveSpread(name, below) {
+  var def = SERIES[name];
+  var spread = GetParameter(below ? def.spreadDownParam : def.spreadUpParam);
+  var scaled = spread * GetParameter(PARAM_GLOBAL_RANGE) / 100.0;
+  return (def.kind === "range") ? Math.round(scaled) : scaled;
+}
+
 function getSeriesBounds(name) {
   var def = SERIES[name];
-  var spreadDown = GetParameter(def.spreadDownParam);
-  var spreadUp = GetParameter(def.spreadUpParam);
+  var spreadDown = getEffectiveSpread(name, true);
+  var spreadUp = getEffectiveSpread(name, false);
   if (def.kind === "scaled") {
     var steps = GetParameter(def.stepsParam);
     return {
@@ -643,9 +681,9 @@ function getSeriesValueAt(name, pos) {
   var steps = GetParameter(def.stepsParam);
   var value = base;
   if (pos < 0) {
-    value = base - Math.round((GetParameter(def.spreadDownParam) * Math.abs(pos)) / steps);
+    value = base - Math.round((getEffectiveSpread(name, true) * Math.abs(pos)) / steps);
   } else if (pos > 0) {
-    value = base + Math.round((GetParameter(def.spreadUpParam) * pos) / steps);
+    value = base + Math.round((getEffectiveSpread(name, false) * pos) / steps);
   }
   return Math.min(def.maxValue, Math.max(def.minValue, value));
 }
@@ -734,12 +772,111 @@ function resetSeriesState() {
   for (var i = 0; i < SERIES_NAMES.length; i++) {
     resetSeries(SERIES_NAMES[i], shape);
   }
+  var range = getLinkRange();
+  var start = getSeriesStart(shape, -range.down, 0, range.up);
+  linkState.pos = start.val;
+  linkState.dir = start.dir;
+  linkState.count = 0;
+}
+
+// Shared Phase master range: the largest distance below / above the base over active series
+function getLinkRange() {
+  var down = 0;
+  var up = 0;
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    var name = SERIES_NAMES[i];
+    if (!isSeriesActive(name)) continue;
+    var b = getSeriesBounds(name);
+    down = Math.max(down, b.basePos - b.minPos);
+    up = Math.max(up, b.maxPos - b.basePos);
+  }
+  return { down: down, up: up };
+}
+
+// Shared Phase: a series' position for a master position (scaled onto the series' own range)
+function getLinkedPos(name, masterPos, range) {
+  var b = getSeriesBounds(name);
+  if (masterPos >= 0) {
+    if (range.up === 0) return b.basePos;
+    return b.basePos + Math.round(masterPos / range.up * (b.maxPos - b.basePos));
+  }
+  return b.basePos - Math.round(-masterPos / range.down * (b.basePos - b.minPos));
+}
+
+// Number of advances for a series to complete one pass with the given shape
+function getPassLength(name, shape) {
+  var b = getSeriesBounds(name);
+  var span = b.maxPos - b.minPos;
+  if (span === 0) return 1;
+  return (shape === 2) ? 2 * span : span + 1;
 }
 
 // Advance series for all active modulations.
 // isCycleEnd: true when called at the end of an arp cycle (cycleOnly series advance only then)
-// Returns { name: true } for each series that just completed a full pass (back at its start).
+// Returns { name: true } for each series that just completed a full pass (back at its start);
+// with Link Series on, all series complete their pass together.
 function advanceProgressions(isCycleEnd) {
+  var link = GetParameter(PARAM_LINK);
+  if (link === LINK_SHARED) {
+    return advanceShared(isCycleEnd);
+  }
+  if (link === LINK_RESTART) {
+    return advanceRestartTogether(isCycleEnd);
+  }
+  return advanceIndependent(isCycleEnd);
+}
+
+// Mark every active series as having completed a pass
+function allCompleted() {
+  var completed = {};
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    if (isSeriesActive(SERIES_NAMES[i])) completed[SERIES_NAMES[i]] = true;
+  }
+  return completed;
+}
+
+function advanceShared(isCycleEnd) {
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+  var range = getLinkRange();
+  var result = stepSeriesValue(linkState.pos, linkState.dir, -range.down, range.up, shape);
+  linkState.pos = result.val;
+  linkState.dir = result.dir;
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    var name = SERIES_NAMES[i];
+    if (!isSeriesActive(name)) continue;
+    if (SERIES[name].cycleOnly && !isCycleEnd) continue; // picks up the shared phase at cycle end
+    seriesState[name].pos = getLinkedPos(name, linkState.pos, range);
+    seriesState[name].dir = linkState.dir;
+  }
+  var start = getSeriesStart(shape, -range.down, 0, range.up);
+  if (range.down + range.up > 0 && linkState.pos === start.val && linkState.dir === start.dir) {
+    return allCompleted();
+  }
+  return {};
+}
+
+function advanceRestartTogether(isCycleEnd) {
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+  advanceIndependent(isCycleEnd);
+  // The longest pass among the series that advance on every trigger (cycleOnly series advance
+  // at a different rate with Per Note Step, so they only restart along with the others)
+  var perStep = (GetParameter(PARAM_ADVANCE_TRIGGER) === 1);
+  var longest = 0;
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    var name = SERIES_NAMES[i];
+    if (!isSeriesActive(name)) continue;
+    if (SERIES[name].cycleOnly && perStep) continue;
+    longest = Math.max(longest, getPassLength(name, shape));
+  }
+  linkState.count++;
+  if (longest > 1 && linkState.count >= longest) {
+    resetSeriesState();
+    return allCompleted();
+  }
+  return {};
+}
+
+function advanceIndependent(isCycleEnd) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
   var completed = {};
   for (var i = 0; i < SERIES_NAMES.length; i++) {
@@ -980,9 +1117,13 @@ function ProcessMIDI() {
   }
 
   // 4. Catch up if transport jumped forward or got out of range
-  // (the schedule can legitimately run one slowest step, 6 beats, past the block, and be up to
-  // CHORD_LATE_TOLERANCE behind it after a late chord or a loop wrap; such a note plays immediately)
-  if (nextBeatToSchedule < info.blockStartBeat - CHORD_LATE_TOLERANCE || nextBeatToSchedule > info.blockEndBeat + 8.0) {
+  // (the schedule can legitimately run one slowest step, 6 beats, past the block; it can be up to
+  // CHORD_LATE_TOLERANCE behind it after a late chord or a loop wrap, where the note plays
+  // immediately; and a swung off-beat waits on its straight grid position until its delayed onset)
+  var currentRate = getSeriesValue("subdiv");
+  var maxSwingDelay = (2 * getSeriesValue("swing") / 100 - 1) * getRateBeats(currentRate);
+  if (nextBeatToSchedule < info.blockStartBeat - CHORD_LATE_TOLERANCE - maxSwingDelay ||
+      nextBeatToSchedule > info.blockEndBeat + 8.0) {
     var catchRate = getSeriesValue("subdiv");
     alignSchedule(info.blockStartBeat, getRateGrid(catchRate), getRateBeats(catchRate));
     pendingRealign = null;
@@ -1041,7 +1182,17 @@ function ProcessMIDI() {
       }
     }
 
-    // B. Select note
+    // B. Apply swing: the grid pointer stays on the straight grid; only this note's timing moves
+    // (never in the past: a chord that started on a grid line just before this block plays now).
+    // A note is only sent in the block where it starts: if swing pushes it past this block, wait.
+    // Otherwise a chord released in between would leave the queued note playing after release.
+    var swing = getSwingTiming(swingStepCount % 2 === 1, stepBeatDuration, getSeriesValue("swing"));
+    var noteOnBeat = Math.max(nextBeatToSchedule + swing.offset, info.blockStartBeat);
+    if (noteOnBeat >= info.blockEndBeat) {
+      break;
+    }
+
+    // C. Select note
     var pattern = getSeriesValue("pattern");
     var noteData;
     if (pattern === 5) { // Random
@@ -1051,18 +1202,13 @@ function ProcessMIDI() {
       noteData = sequenceNotes[currentStepIndex];
     }
 
-    // C. Calculate velocity (series, then humanize)
+    // D. Calculate velocity (series, then humanize)
     var velocity = noteData.velocity;
     if (isSeriesActive("velocity")) {
       velocity = getSeriesValue("velocity");
     }
     velocity = Math.round(velocity + randomOffset(GetParameter(PARAM_HUMANIZE_VEL)));
     velocity = Math.min(127, Math.max(1, velocity));
-
-    // D. Apply swing: the grid pointer stays on the straight grid; only this note's timing moves
-    var swing = getSwingTiming(swingStepCount % 2 === 1, stepBeatDuration, getSeriesValue("swing"));
-    // (never in the past: a chord that started on a grid line just before this block plays now)
-    var noteOnBeat = Math.max(nextBeatToSchedule + swing.offset, info.blockStartBeat);
 
     // E. Calculate Gate (series, then humanize) & Note-Off Beat, relative to the swung slot
     var gatePercent = getSeriesValue("gate") + randomOffset(GetParameter(PARAM_HUMANIZE_GATE));
@@ -1150,20 +1296,30 @@ function ParameterChanged(param, value) {
 
   // Rate controls changed by hand: snap the next note to the new rate's grid
   var sub = SERIES.subdiv;
-  if (param === sub.baseParam || param === sub.activeParam || param === sub.spreadDownParam || param === sub.spreadUpParam) {
+  if (param === sub.baseParam || param === sub.activeParam || param === sub.spreadDownParam || param === sub.spreadUpParam ||
+      (param === PARAM_GLOBAL_RANGE && isSeriesActive("subdiv"))) {
     pendingRealign = "rate";
   }
 
   // Restart a series when its position falls outside its bounds, or when its
-  // base, active toggle, or the progression shape changes
+  // base, active toggle, or the progression shape changes. Linked series restart together.
+  var linked = (GetParameter(PARAM_LINK) !== LINK_OFF);
+  var resyncAll = (param === PARAM_LINK);
   for (var i = 0; i < SERIES_NAMES.length; i++) {
     var name = SERIES_NAMES[i];
     var def = SERIES[name];
     var b = getSeriesBounds(name);
     var pos = seriesState[name].pos;
     if (pos < b.minPos || pos > b.maxPos || param === def.activeParam || param === def.baseParam || param === PARAM_PROG_SHAPE) {
-      resetSeries(name, shape);
+      if (linked) {
+        resyncAll = true;
+      } else {
+        resetSeries(name, shape);
+      }
     }
+  }
+  if (param === PARAM_LINK || (linked && (resyncAll || param === PARAM_ADVANCE_TRIGGER))) {
+    resetSeriesState();
   }
 
   rebuildSequence();
