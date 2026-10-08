@@ -55,6 +55,15 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
 3. Open Scripter editor, paste the contents of `progressive_arp.js`, and click **Run Script**.
 4. Start Logic's transport — the arpeggiator only plays while the host is playing.
 
+## Recording SARP's Output to MIDI
+Scripter can only send MIDI to the next plugin; it can't write regions. To capture the arpeggio as an editable MIDI region, route it to a second track in Logic:
+
+1. Create a second software instrument track (the receiving track).
+2. Select it, open the inspector (**I**), and in the **Track** section set **Internal MIDI In** to the track running SARP.
+3. Arm the receiving track and record while the source region plays on the SARP track. The generated notes are recorded in real time as a new MIDI region.
+
+Mute or lower one of the two tracks while recording to avoid hearing the part twice.
+
 ## Debug Log & Replay
 Turn on **Debug Log** (last control) *before* starting Logic's transport. The Scripter console then shows `[SARP]` lines: the settings (`SET`), every input note (`IN`), every generated note with its rate, octave, pattern, gate and step (`OUT`), grid alignments (`ALIGN`), series passes (`PASS`), parameter changes, loop wraps and transport start/stop. Positions are shown as `@absolute-beat [bar|beat]`.
 
