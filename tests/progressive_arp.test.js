@@ -10,6 +10,7 @@ const SHAPE = { UP: 0, DOWN: 1, TRIANGLE: 2 };
 const TRIGGER = { CYCLE: 0, STEP: 1 };
 const TIMING = { SNAP: 0, FLOW: 1, FREE: 2 };
 const LINK = { OFF: 0, SHARED: 1, RESTART: 2 };
+const CURVE = { LINEAR: 0, ACCEL: 1, DECEL: 2, FIB: 3, PRIMES: 4, RANDOM: 5, CUSTOM: 6 };
 // Rate menu indices, looked up by name from the script's RATES table
 const RATE = (() => {
   const { ctx } = loadScript(SCRIPT);
@@ -26,6 +27,7 @@ const r4 = (x) => Math.round(x * 1e4) / 1e4;
 /** Load the arp with named parameter overrides, e.g. { PARAM_PATTERN: 0 }. */
 function arp(named = {}, options = {}) {
   const probe = loadScript(SCRIPT);
+  for (let i = 0; i < 8; i++) probe.ctx[`PARAM_CUSTOM_STEP_${i + 1}`] = probe.ctx.PARAM_CUSTOM_STEP_1 + i;
   const params = {};
   for (const [name, value] of Object.entries(named)) {
     assert.ok(name in probe.ctx, `unknown parameter constant ${name}`);
@@ -1069,6 +1071,7 @@ describe("note bursts (regression: +10 dB pop on the second loop pass)", () => {
         PARAM_OCT_ACTIVE: pick([0, 1]),
         PARAM_VEL_ACTIVE: pick([0, 1]),
         PARAM_GLOBAL_RANGE: pick([0, 50, 100]),
+        PARAM_CURVE: pick([CURVE.LINEAR, CURVE.ACCEL, CURVE.FIB, CURVE.RANDOM, CURVE.CUSTOM]),
       });
       const left = 1, right = 1 + pick([4, 8, 9.5]);
       host.setCycle(left, right, { straddle: rand() < 0.5 });
@@ -1262,5 +1265,98 @@ describe("global range", () => {
     };
     assert.deepEqual(walkOctaves(100), [46, 52, 58, 64, 70, 76, 82, 88, 94]);
     assert.deepEqual(walkOctaves(50), [58, 61, 64, 67, 70, 73, 76, 79, 82]);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Series Curve
+// ----------------------------------------------------------------------------
+
+describe("series curve", () => {
+  // velocity k = -4..+4 (9 positions) and octave 1..4 (4 positions)
+  const SET = {
+    PARAM_VEL_BASE: 70, PARAM_VEL_ACTIVE: 1, PARAM_VEL_SPREAD_DOWN: 24, PARAM_VEL_SPREAD_UP: 24, PARAM_VEL_STEPS: 4,
+    PARAM_BASE_OCTAVE: 1, PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_DOWN: 0, PARAM_OCT_SPREAD_UP: 3,
+  };
+  const custom = (steps) => {
+    const named = { PARAM_CURVE: CURVE.CUSTOM, PARAM_CUSTOM_LENGTH: steps.length };
+    steps.forEach((v, i) => { named[`PARAM_CUSTOM_STEP_${i + 1}`] = v; });
+    return named;
+  };
+  function walk(named, count) {
+    const { ctx } = arp(Object.assign({}, SET, named));
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push([ctx.seriesState.velocity.pos, ctx.seriesState.octave.pos]);
+      ctx.advanceProgressions(true);
+    }
+    return out;
+  }
+  it("Linear (default) is unchanged", () => {
+    const seen = walk({ PARAM_PROG_SHAPE: SHAPE.UP }, 10);
+    assert.deepEqual(seen.map((s) => s[0]), [-4, -3, -2, -1, 0, 1, 2, 3, 4, -4]);
+  });
+
+  it("Custom 1, 5, 6, 8: positions on each series' own range, all series together", () => {
+    const seen = walk(Object.assign({ PARAM_PROG_SHAPE: SHAPE.UP }, custom([1, 5, 6, 8])), 5);
+    assert.deepEqual(seen.map((s) => s[0]), [-4, 1, 2, 4, -4]); // 9 positions
+    assert.deepEqual(seen.map((s) => s[1]), [1, 3, 3, 4, 1]); // 4 positions: 5 and 6 both land on 3
+  });
+
+  it("Down plays the list backward, Up-Down forward then back", () => {
+    const steps = custom([1, 5, 6, 8]);
+    assert.deepEqual(walk(Object.assign({ PARAM_PROG_SHAPE: SHAPE.DOWN }, steps), 5).map((s) => s[0]), [4, 2, 1, -4, 4]);
+    assert.deepEqual(walk(Object.assign({ PARAM_PROG_SHAPE: SHAPE.TRIANGLE }, steps), 8).map((s) => s[0]), [-4, 1, 2, 4, 2, 1, -4, 1]);
+  });
+
+  it("Accelerating takes small steps first, big steps last; Decelerating the reverse", () => {
+    assert.deepEqual(walk({ PARAM_CURVE: CURVE.ACCEL, PARAM_PROG_SHAPE: SHAPE.UP }, 8).map((s) => s[0]), [-4, -4, -3, -3, -1, 0, 2, 4]);
+    assert.deepEqual(walk({ PARAM_CURVE: CURVE.DECEL, PARAM_PROG_SHAPE: SHAPE.UP }, 8).map((s) => s[0]), [-4, -2, 0, 1, 3, 3, 4, 4]);
+  });
+
+  it("Fibonacci and Primes use their step lists", () => {
+    assert.deepEqual(walk({ PARAM_CURVE: CURVE.FIB, PARAM_PROG_SHAPE: SHAPE.UP }, 6).map((s) => s[0]), [-4, -3, -2, 1, 4, -4]);
+    assert.deepEqual(walk({ PARAM_CURVE: CURVE.PRIMES, PARAM_PROG_SHAPE: SHAPE.UP }, 5).map((s) => s[0]), [-3, -2, 1, 3, -3]);
+  });
+
+  it("Random picks steps from the scale and never repeats the previous one", () => {
+    const { ctx } = arp(Object.assign({}, SET, { PARAM_CURVE: CURVE.RANDOM }), { random: seededRandom(5) });
+    const seen = [];
+    for (let i = 0; i < 40; i++) { seen.push(ctx.curveState.index); ctx.advanceProgressions(true); }
+    for (let i = 1; i < seen.length; i++) assert.notEqual(seen[i], seen[i - 1]);
+    assert.ok(new Set(seen).size >= 6, "uses most of the scale");
+    assert.ok(seen.every((v) => v >= 0 && v <= 7));
+  });
+
+  it("reports a completed pass at the end of the list (Flow realigns there)", () => {
+    const { ctx } = arp(Object.assign({}, SET, custom([1, 5, 6, 8]), { PARAM_PROG_SHAPE: SHAPE.UP, PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_UP: 1 }));
+    const passes = [];
+    for (let i = 0; i < 8; i++) if (ctx.advanceProgressions(true).subdiv) passes.push(i + 1);
+    assert.deepEqual(passes, [4, 8]);
+  });
+
+  it("changing a custom step restarts the curve", () => {
+    const host = arp(Object.assign({}, SET, custom([1, 5, 6, 8]), { PARAM_PROG_SHAPE: SHAPE.UP }));
+    host.ctx.advanceProgressions(true);
+    host.ctx.advanceProgressions(true);
+    host.setParam(host.ctx.PARAM_CUSTOM_STEP_1, 8);
+    assert.equal(host.ctx.curveState.index, 0);
+    assert.equal(host.ctx.seriesState.velocity.pos, 4);
+  });
+
+  it("works with Global Range (the curve scales into the narrower range)", () => {
+    const seen = walk(Object.assign({ PARAM_PROG_SHAPE: SHAPE.UP, PARAM_GLOBAL_RANGE: 50 }, custom([1, 8])), 2);
+    const { ctx } = arp(Object.assign({}, SET, { PARAM_GLOBAL_RANGE: 50 }));
+    assert.deepEqual(seen.map((s) => ctx.getSeriesValueAt("velocity", s[0])), [58, 82]);
+  });
+
+  it("plays the custom sequence per note during playback", () => {
+    const host = arp(Object.assign({}, PLAIN, SET, custom([1, 5, 6, 8]), {
+      PARAM_OCT_ACTIVE: 0, PARAM_PROG_SHAPE: SHAPE.UP, PARAM_ADVANCE_TRIGGER: TRIGGER.STEP,
+    }));
+    host.noteOn(60);
+    host.play(3.9);
+    // k = -4, 1, 2, 4 -> 70 - 24, 70 + 6, 70 + 12, 70 + 24
+    assert.deepEqual(host.noteOns().map((n) => n.velocity), [46, 76, 82, 94, 46, 76, 82, 94]);
   });
 });

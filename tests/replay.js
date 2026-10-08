@@ -105,6 +105,21 @@ function main() {
     position = beat;
   }
 
+  // Notes played just before the transport started (e.g. a region note on the loop start, or a
+  // latched chord) are logged before the START line: deliver them before starting.
+  const startIndex = lines.indexOf(startLine);
+  let firstPreStart = startIndex;
+  while (firstPreStart > 0 && /^(IN|CHORD) /.test(lines[firstPreStart - 1])) {
+    firstPreStart--;
+  }
+  for (const line of lines.slice(firstPreStart, startIndex)) {
+    if (line.startsWith("IN on ")) {
+      host.noteOn(parsePitch(line), parseInt(line.match(/ v(\d+)/)[1], 10), parseBeat(line));
+    } else if (line.startsWith("IN off ")) {
+      host.noteOff(parsePitch(line), parseBeat(line));
+    }
+  }
+
   let afterStart = false;
   for (const line of lines) {
     if (line === startLine) afterStart = true;

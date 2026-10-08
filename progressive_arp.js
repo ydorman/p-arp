@@ -97,6 +97,12 @@ var PluginParameters = [
     defaultValue: 100, // scales every series' Spread (-) and (+): 100% = as set, 0% = stays at base
     unit: "%"
   },
+  {
+    name: "Series Curve",
+    type: "menu",
+    valueStrings: ["Linear", "Accelerating", "Decelerating", "Fibonacci", "Primes", "Random", "Custom"],
+    defaultValue: 0 // Linear: every series steps through each value of its range
+  },
 
   // --- PATTERN SERIES GAUGE ---
   {
@@ -335,6 +341,80 @@ var PluginParameters = [
     unit: "%"
   },
 
+  // --- CUSTOM SERIES (used when Series Curve = Custom) ---
+  {
+    name: "Custom Length",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 4
+  },
+  {
+    name: "Custom Step 1",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 1 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 2",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 5 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 3",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 6 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 4",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 8 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 5",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 2 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 6",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 3 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 7",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 4 // 1 = each series' min ... 8 = its max
+  },
+  {
+    name: "Custom Step 8",
+    type: "lin",
+    minValue: 1,
+    maxValue: 8,
+    numberOfSteps: 7,
+    defaultValue: 7 // 1 = each series' min ... 8 = its max
+  },
+
   // --- DEBUG ---
   {
     name: "Debug Log",
@@ -349,45 +429,58 @@ var PARAM_ADVANCE_TRIGGER = 1;
 var PARAM_PROG_SHAPE = 2;
 var PARAM_LINK = 3;
 var PARAM_GLOBAL_RANGE = 4;
+var PARAM_CURVE = 5;
 
-var PARAM_PATTERN = 5;
-var PARAM_PAT_ACTIVE = 6;
-var PARAM_PAT_SPREAD_DOWN = 7;
-var PARAM_PAT_SPREAD_UP = 8;
+var PARAM_PATTERN = 6;
+var PARAM_PAT_ACTIVE = 7;
+var PARAM_PAT_SPREAD_DOWN = 8;
+var PARAM_PAT_SPREAD_UP = 9;
 
-var PARAM_BASE_OCTAVE = 9;
-var PARAM_OCT_ACTIVE = 10;
-var PARAM_OCT_SPREAD_DOWN = 11;
-var PARAM_OCT_SPREAD_UP = 12;
+var PARAM_BASE_OCTAVE = 10;
+var PARAM_OCT_ACTIVE = 11;
+var PARAM_OCT_SPREAD_DOWN = 12;
+var PARAM_OCT_SPREAD_UP = 13;
 
-var PARAM_BASE_SUBDIV = 13;
-var PARAM_SUB_ACTIVE = 14;
-var PARAM_SUB_SPREAD_DOWN = 15;
-var PARAM_SUB_SPREAD_UP = 16;
-var PARAM_SUB_TIMING = 17;
+var PARAM_BASE_SUBDIV = 14;
+var PARAM_SUB_ACTIVE = 15;
+var PARAM_SUB_SPREAD_DOWN = 16;
+var PARAM_SUB_SPREAD_UP = 17;
+var PARAM_SUB_TIMING = 18;
 
-var PARAM_GATE = 18;
-var PARAM_GATE_ACTIVE = 19;
-var PARAM_GATE_SPREAD_DOWN = 20;
-var PARAM_GATE_SPREAD_UP = 21;
-var PARAM_GATE_STEPS = 22;
+var PARAM_GATE = 19;
+var PARAM_GATE_ACTIVE = 20;
+var PARAM_GATE_SPREAD_DOWN = 21;
+var PARAM_GATE_SPREAD_UP = 22;
+var PARAM_GATE_STEPS = 23;
 
-var PARAM_VEL_BASE = 23;
-var PARAM_VEL_ACTIVE = 24;
-var PARAM_VEL_SPREAD_DOWN = 25;
-var PARAM_VEL_SPREAD_UP = 26;
-var PARAM_VEL_STEPS = 27;
+var PARAM_VEL_BASE = 24;
+var PARAM_VEL_ACTIVE = 25;
+var PARAM_VEL_SPREAD_DOWN = 26;
+var PARAM_VEL_SPREAD_UP = 27;
+var PARAM_VEL_STEPS = 28;
 
-var PARAM_SWING = 28;
-var PARAM_SWING_ACTIVE = 29;
-var PARAM_SWING_SPREAD_DOWN = 30;
-var PARAM_SWING_SPREAD_UP = 31;
-var PARAM_SWING_STEPS = 32;
+var PARAM_SWING = 29;
+var PARAM_SWING_ACTIVE = 30;
+var PARAM_SWING_SPREAD_DOWN = 31;
+var PARAM_SWING_SPREAD_UP = 32;
+var PARAM_SWING_STEPS = 33;
 
-var PARAM_HUMANIZE_VEL = 33;
-var PARAM_HUMANIZE_GATE = 34;
+var PARAM_HUMANIZE_VEL = 34;
+var PARAM_HUMANIZE_GATE = 35;
 
-var PARAM_DEBUG = 35;
+var PARAM_CUSTOM_LENGTH = 36;
+var PARAM_CUSTOM_STEP_1 = 37; // Custom Step 1..8 are consecutive
+
+var PARAM_DEBUG = 45;
+
+// Series Curve menu
+var CURVE_LINEAR = 0;
+var CURVE_ACCELERATING = 1;
+var CURVE_DECELERATING = 2;
+var CURVE_FIBONACCI = 3;
+var CURVE_PRIMES = 4;
+var CURVE_RANDOM = 5;
+var CURVE_CUSTOM = 6;
 
 // Link Series menu
 var LINK_OFF = 0;
@@ -482,6 +575,9 @@ var seriesState = {};
 //   and max together (series with a shorter range hold values).
 // Restart Together: count of advances; all series restart when the longest pass completes.
 var linkState = { pos: 0, dir: 1, count: 0 };
+
+// Series Curve state: index into the curve's step list, and direction (for Up-Down)
+var curveState = { index: 0, dir: 1, lastRandom: -1 };
 for (var si = 0; si < SERIES_NAMES.length; si++) {
   seriesState[SERIES_NAMES[si]] = { pos: 0, dir: 1 };
 }
@@ -528,14 +624,16 @@ function fmtParamValue(index) {
 // One line per parameter group (groups are separated by blank comments in PluginParameters,
 // so use fixed group sizes matching the layout above)
 var SETTINGS_GROUPS = [
-  [PARAM_LATCH, PARAM_ADVANCE_TRIGGER, PARAM_PROG_SHAPE, PARAM_LINK, PARAM_GLOBAL_RANGE],
+  [PARAM_LATCH, PARAM_ADVANCE_TRIGGER, PARAM_PROG_SHAPE, PARAM_LINK, PARAM_GLOBAL_RANGE, PARAM_CURVE],
   [PARAM_PATTERN, PARAM_PAT_ACTIVE, PARAM_PAT_SPREAD_DOWN, PARAM_PAT_SPREAD_UP],
   [PARAM_BASE_OCTAVE, PARAM_OCT_ACTIVE, PARAM_OCT_SPREAD_DOWN, PARAM_OCT_SPREAD_UP],
   [PARAM_BASE_SUBDIV, PARAM_SUB_ACTIVE, PARAM_SUB_SPREAD_DOWN, PARAM_SUB_SPREAD_UP, PARAM_SUB_TIMING],
   [PARAM_GATE, PARAM_GATE_ACTIVE, PARAM_GATE_SPREAD_DOWN, PARAM_GATE_SPREAD_UP, PARAM_GATE_STEPS],
   [PARAM_VEL_BASE, PARAM_VEL_ACTIVE, PARAM_VEL_SPREAD_DOWN, PARAM_VEL_SPREAD_UP, PARAM_VEL_STEPS],
   [PARAM_SWING, PARAM_SWING_ACTIVE, PARAM_SWING_SPREAD_DOWN, PARAM_SWING_SPREAD_UP, PARAM_SWING_STEPS],
-  [PARAM_HUMANIZE_VEL, PARAM_HUMANIZE_GATE]
+  [PARAM_HUMANIZE_VEL, PARAM_HUMANIZE_GATE],
+  [PARAM_CUSTOM_LENGTH, PARAM_CUSTOM_STEP_1, PARAM_CUSTOM_STEP_1 + 1, PARAM_CUSTOM_STEP_1 + 2, PARAM_CUSTOM_STEP_1 + 3,
+   PARAM_CUSTOM_STEP_1 + 4, PARAM_CUSTOM_STEP_1 + 5, PARAM_CUSTOM_STEP_1 + 6, PARAM_CUSTOM_STEP_1 + 7]
 ];
 
 function logSettings() {
@@ -777,6 +875,101 @@ function resetSeriesState() {
   linkState.pos = start.val;
   linkState.dir = start.dir;
   linkState.count = 0;
+  if (isCurveActive()) {
+    resetCurve();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// SERIES CURVES
+// ----------------------------------------------------------------------------
+// A non-linear curve is a list of steps on a 1..8 scale (1 = each series' min, 8 = its max).
+// All active series follow the same step list together, each scaled onto its own range.
+// The Progression Shape plays the list forward (Up), backward (Down) or forward then back
+// (Up-Down); Random picks a step at random, never repeating the previous one.
+function isCurveActive() {
+  return GetParameter(PARAM_CURVE) !== CURVE_LINEAR;
+}
+
+// Step list for the selected curve (values on the 1..8 scale, may be fractional)
+function getCurveSteps() {
+  var curve = GetParameter(PARAM_CURVE);
+  var steps = [];
+  var i;
+  if (curve === CURVE_ACCELERATING) {
+    for (i = 0; i < 8; i++) steps.push(1 + 7 * Math.pow(i / 7, 2));
+  } else if (curve === CURVE_DECELERATING) {
+    for (i = 0; i < 8; i++) steps.push(1 + 7 * (1 - Math.pow(1 - i / 7, 2)));
+  } else if (curve === CURVE_FIBONACCI) {
+    steps = [1, 2, 3, 5, 8];
+  } else if (curve === CURVE_PRIMES) {
+    steps = [2, 3, 5, 7];
+  } else if (curve === CURVE_CUSTOM) {
+    var length = GetParameter(PARAM_CUSTOM_LENGTH);
+    for (i = 0; i < length; i++) steps.push(GetParameter(PARAM_CUSTOM_STEP_1 + i));
+  } else { // Random (and Linear, unused): every step of the scale
+    for (i = 1; i <= 8; i++) steps.push(i);
+  }
+  return steps;
+}
+
+// A series' position for a step on the 1..8 scale
+function getCurvePos(name, step) {
+  var b = getSeriesBounds(name);
+  return b.minPos + Math.round((step - 1) / 7 * (b.maxPos - b.minPos));
+}
+
+// Move every active series to the current curve step (cycleOnly series only at a cycle end)
+function applyCurve(isCycleEnd) {
+  var steps = getCurveSteps();
+  var step = steps[Math.min(curveState.index, steps.length - 1)];
+  for (var i = 0; i < SERIES_NAMES.length; i++) {
+    var name = SERIES_NAMES[i];
+    if (!isSeriesActive(name)) continue;
+    if (SERIES[name].cycleOnly && !isCycleEnd) continue;
+    seriesState[name].pos = getCurvePos(name, step);
+  }
+}
+
+function resetCurve() {
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+  var last = getCurveSteps().length - 1;
+  curveState.index = (shape === 1) ? last : 0; // Down plays the list backward
+  curveState.dir = (shape === 1) ? -1 : 1;
+  curveState.lastRandom = -1;
+  if (GetParameter(PARAM_CURVE) === CURVE_RANDOM) {
+    curveState.index = pickRandomStep(last + 1);
+  }
+  applyCurve(true);
+}
+
+// Random step index that differs from the previous one
+function pickRandomStep(count) {
+  var index = Math.floor(Math.random() * count);
+  if (count > 1 && index === curveState.lastRandom) {
+    index = (index + 1 + Math.floor(Math.random() * (count - 1))) % count;
+  }
+  curveState.lastRandom = index;
+  return index;
+}
+
+// Returns { name: true } for every active series when the curve completes a pass
+function advanceCurve(isCycleEnd) {
+  var shape = GetParameter(PARAM_PROG_SHAPE);
+  var last = getCurveSteps().length - 1;
+  var completed = false;
+  if (GetParameter(PARAM_CURVE) === CURVE_RANDOM) {
+    curveState.index = pickRandomStep(last + 1);
+  } else {
+    var result = stepSeriesValue(curveState.index, curveState.dir, 0, last, shape);
+    curveState.index = result.val;
+    curveState.dir = result.dir;
+    var startIndex = (shape === 1) ? last : 0;
+    var startDir = (shape === 1) ? -1 : 1;
+    completed = (last > 0 && curveState.index === startIndex && curveState.dir === startDir);
+  }
+  applyCurve(isCycleEnd);
+  return completed ? allCompleted() : {};
 }
 
 // Shared Phase master range: the largest distance below / above the base over active series
@@ -816,6 +1009,9 @@ function getPassLength(name, shape) {
 // Returns { name: true } for each series that just completed a full pass (back at its start);
 // with Link Series on, all series complete their pass together.
 function advanceProgressions(isCycleEnd) {
+  if (isCurveActive()) {
+    return advanceCurve(isCycleEnd);
+  }
   var link = GetParameter(PARAM_LINK);
   if (link === LINK_SHARED) {
     return advanceShared(isCycleEnd);
@@ -1302,9 +1498,11 @@ function ParameterChanged(param, value) {
   }
 
   // Restart a series when its position falls outside its bounds, or when its
-  // base, active toggle, or the progression shape changes. Linked series restart together.
-  var linked = (GetParameter(PARAM_LINK) !== LINK_OFF);
-  var resyncAll = (param === PARAM_LINK);
+  // base, active toggle, or the progression shape changes. Linked series (and series following
+  // a curve) restart together; changing the curve or its steps restarts it.
+  var linked = (GetParameter(PARAM_LINK) !== LINK_OFF) || isCurveActive();
+  var resyncAll = (param === PARAM_LINK) || (param === PARAM_CURVE) ||
+                  (param >= PARAM_CUSTOM_LENGTH && param <= PARAM_CUSTOM_STEP_1 + 7);
   for (var i = 0; i < SERIES_NAMES.length; i++) {
     var name = SERIES_NAMES[i];
     var def = SERIES[name];
@@ -1318,7 +1516,7 @@ function ParameterChanged(param, value) {
       }
     }
   }
-  if (param === PARAM_LINK || (linked && (resyncAll || param === PARAM_ADVANCE_TRIGGER))) {
+  if (param === PARAM_LINK || param === PARAM_CURVE || (linked && (resyncAll || param === PARAM_ADVANCE_TRIGGER))) {
     resetSeriesState();
   }
 

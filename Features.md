@@ -54,7 +54,7 @@ When playing a C major chord ($C_4 - E_4 - G_4$):
    * `Down` (sawtooth down: max $\to$ base $\to$ min $\to$ max)
    * `Up-Down` (triangle LFO: starts on base $\to$ max $\to$ base $\to$ min $\to$ base)
    *(Status: Implemented)*
-9. **Non-linear / custom series**: Ability to define arbitrary sequences (e.g. $1, 5, 6, 8$).
+9. ✅ **Non-linear / custom series**: Ability to define arbitrary sequences (e.g. $1, 5, 6, 8$). Global `Series Curve` menu (Linear, Accelerating, Decelerating, Fibonacci, Primes, Random, Custom); Custom uses `Custom Length` + `Custom Step 1–8`. Steps are on a 1–8 scale (1 = min, 8 = max of each series' range) and drive all active series together. *(Status: Implemented)*
 10. ✅ **Swing parameter**: Add 'swing' parameter (50% being straight / no swing, and 100% being max swing). Be able to modulate swing dynamically across the series. Implemented with the MPC/Logic convention 50–75% (75% = dotted; a literal 100% would collide with the next note), as a full series target (base, Mod Active, Spread, Steps). *(Status: Implemented)*
 11. **Rate sweep across families (optional)**: A checkbox to let the subdivision series step through every rate in duration order (… 1/4, 1/8 dotted, 1/4 triplet, 1/8 …) instead of doubling within the base rate's family. Possible feature; not planned for now.
 12. **Odd tuplet subdivisions (future)**: Support other tuplet families beyond triplets, e.g. quintuplets (5) and septuplets (7), for a fluid, 'impressionist composer' feel. Would fit as extra rate families in the rate table, with the series doubling within the family as it does for triplets.

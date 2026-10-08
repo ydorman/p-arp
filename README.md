@@ -27,6 +27,13 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - `Shared Phase`: one shared position walks the progression shape; each series maps it onto its own range, so all reach their min, base and max together (shorter ranges hold values). E.g. velocity walking 9 steps while octave goes 1,1,1,1,1,2,2,3,3.
   - `Restart Together`: each series steps on its own, but all restart when the longest one completes its pass.
 - **Global Range**: A master knob (0–100%, default 100%) that scales every series' `Spread (-)` and `Spread (+)` at once, so one gesture widens or narrows the whole progression (0% = everything at its base). Pattern, octave and rate spreads round to whole steps; gate, velocity and swing keep their step count and compress the distance. Works in every Link mode.
+- **Series Curve**: The path the series take through their ranges. Steps are on a 1–8 scale (1 = each series' min, 8 = its max), scaled onto every active series' own range; all series follow the same steps together (Link Series has no effect while a curve is selected).
+  - `Linear` (default): every series steps through each value of its range.
+  - `Accelerating` / `Decelerating`: small steps first and big steps last, or the reverse.
+  - `Fibonacci` (1, 2, 3, 5, 8) and `Primes` (2, 3, 5, 7).
+  - `Random`: a random step on each advance, never the same twice in a row.
+  - `Custom`: `Custom Length` (1–8) and `Custom Step 1–8` (each 1–8) in the Custom Series group, e.g. 1, 5, 6, 8.
+  - Progression Shape plays the step list forward (`Up`), backward (`Down`) or forward then back (`Up-Down`); `Random` ignores it.
 - **Advance Trigger**: Advance the series once per full arp cycle, or on every note step. The Pattern series always advances per arp cycle (switching patterns on every note just scrambles them).
 - **Humanize**: `Humanize Velocity` (±0–40) and `Humanize Gate` (±0–40%) add random variation to each note on top of the series (velocity clamped to 1–127, gate to 1–100%). Timing stays on the grid.
 - **Arp Patterns**: Up, Down, Up/Down, Down/Up, As Played, Random; chord latch.
