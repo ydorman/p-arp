@@ -7,7 +7,7 @@ const SCRIPT = "progressive_arp.js";
 // Menu indices
 const PATTERN = { UP: 0, DOWN: 1, UP_DOWN: 2, DOWN_UP: 3, AS_PLAYED: 4, RANDOM: 5 };
 const SHAPE = { UP: 0, DOWN: 1, TRIANGLE: 2 };
-const TRIGGER = { CYCLE: 0, STEP: 1 };
+const TRIGGER = { CYCLE: 0, STEP: 1, BEAT: 2, BAR: 3, TWO_BARS: 4 };
 const TIMING = { SNAP: 0, FLOW: 1, FREE: 2 };
 const LINK = { OFF: 0, SHARED: 1, RESTART: 2 };
 const CURVE = { LINEAR: 0, ACCEL: 1, DECEL: 2, FIB: 3, PRIMES: 4, RANDOM: 5, CUSTOM: 6 };
@@ -61,6 +61,36 @@ const PLAIN = {
 // ----------------------------------------------------------------------------
 // Pure helpers
 // ----------------------------------------------------------------------------
+
+describe("parameter constants", () => {
+  // Every PARAM_ constant must point at the control it is named after (catches index slips
+  // when controls are inserted)
+  const EXPECTED = {
+    PARAM_LATCH: "Latch Chord", PARAM_ADVANCE_TRIGGER: "Advance Trigger", PARAM_PROG_SHAPE: "Progression Shape",
+    PARAM_LINK: "Link Series", PARAM_GLOBAL_RANGE: "Global Range", PARAM_CURVE: "Series Curve",
+    PARAM_PATTERN: "Arp Pattern", PARAM_PAT_ACTIVE: "Pattern Mod Active",
+    PARAM_PAT_SPREAD_DOWN: "Pattern Spread (-) Before", PARAM_PAT_SPREAD_UP: "Pattern Spread (+) After",
+    PARAM_BASE_OCTAVE: "Base Octave Range", PARAM_OCT_ACTIVE: "Octave Mod Active",
+    PARAM_OCT_SPREAD_DOWN: "Octave Spread (-) Below", PARAM_OCT_SPREAD_UP: "Octave Spread (+) Above", PARAM_OCT_MODE: "Octave Mode",
+    PARAM_BASE_SUBDIV: "Base Subdivision", PARAM_SUB_ACTIVE: "Subdiv Mod Active",
+    PARAM_SUB_SPREAD_DOWN: "Subdiv Spread (-) Slower", PARAM_SUB_SPREAD_UP: "Subdiv Spread (+) Faster", PARAM_SUB_TIMING: "Subdiv Change Timing",
+    PARAM_GATE: "Gate Length (%)", PARAM_GATE_ACTIVE: "Gate Mod Active", PARAM_GATE_SPREAD_DOWN: "Gate Spread (-) Shorter",
+    PARAM_GATE_SPREAD_UP: "Gate Spread (+) Longer", PARAM_GATE_STEPS: "Gate Steps (per side)",
+    PARAM_VEL_BASE: "Velocity Base", PARAM_VEL_ACTIVE: "Velocity Mod Active", PARAM_VEL_SPREAD_DOWN: "Velocity Spread (-) Down",
+    PARAM_VEL_SPREAD_UP: "Velocity Spread (+) Up", PARAM_VEL_STEPS: "Velocity Steps (per side)",
+    PARAM_SWING: "Swing (%)", PARAM_SWING_ACTIVE: "Swing Mod Active", PARAM_SWING_SPREAD_DOWN: "Swing Spread (-) Straighter",
+    PARAM_SWING_SPREAD_UP: "Swing Spread (+) Swingier", PARAM_SWING_STEPS: "Swing Steps (per side)",
+    PARAM_HUMANIZE_VEL: "Humanize Velocity (+/-)", PARAM_HUMANIZE_GATE: "Humanize Gate (+/- %)",
+    PARAM_CUSTOM_LENGTH: "Custom Length", PARAM_CUSTOM_STEP_1: "Custom Step 1", PARAM_DEBUG: "Debug Log",
+  };
+  it("each constant points at its control", () => {
+    const { ctx } = loadScript(SCRIPT);
+    const constants = Object.keys(ctx).filter((k) => /^PARAM_/.test(k));
+    assert.deepEqual(constants.filter((k) => !(k in EXPECTED)), [], "constants missing from this test");
+    for (const [k, name] of Object.entries(EXPECTED)) assert.equal(ctx.PluginParameters[ctx[k]].name, name, k);
+    for (let i = 0; i < 8; i++) assert.equal(ctx.PluginParameters[ctx.PARAM_CUSTOM_STEP_1 + i].name, `Custom Step ${i + 1}`);
+  });
+});
 
 describe("rates", () => {
   const { ctx } = arp();
@@ -1065,8 +1095,9 @@ describe("note bursts (regression: +10 dB pop on the second loop pass)", () => {
         PARAM_SUB_ACTIVE: pick([0, 1]),
         PARAM_SUB_SPREAD_UP: pick([0, 1, 2]),
         PARAM_SUB_TIMING: pick([TIMING.SNAP, TIMING.FLOW, TIMING.FREE]),
-        PARAM_ADVANCE_TRIGGER: pick([TRIGGER.CYCLE, TRIGGER.STEP]),
+        PARAM_ADVANCE_TRIGGER: pick([TRIGGER.CYCLE, TRIGGER.STEP, TRIGGER.BEAT, TRIGGER.BAR]),
         PARAM_SWING: pick([50, 62]),
+        PARAM_OCT_MODE: pick([0, 1]),
         PARAM_LINK: pick([LINK.OFF, LINK.SHARED, LINK.RESTART]),
         PARAM_OCT_ACTIVE: pick([0, 1]),
         PARAM_VEL_ACTIVE: pick([0, 1]),
@@ -1358,5 +1389,123 @@ describe("series curve", () => {
     host.play(3.9);
     // k = -4, 1, 2, 4 -> 70 - 24, 70 + 6, 70 + 12, 70 + 24
     assert.deepEqual(host.noteOns().map((n) => n.velocity), [46, 76, 82, 94, 46, 76, 82, 94]);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Octave Transpose & time-based Advance Triggers
+// ----------------------------------------------------------------------------
+
+describe("octave mode", () => {
+  // The reported case: 4-note chord at 1/16, octave 1 with spread (+) 1, per arp cycle
+  const CHORD = [55, 60, 62, 64];
+  const REPORT = Object.assign({}, PLAIN, {
+    PARAM_PATTERN: PATTERN.AS_PLAYED, PARAM_BASE_SUBDIV: RATE["1/16"],
+    PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_DOWN: 0, PARAM_OCT_SPREAD_UP: 1,
+  });
+  const play = (named, beats) => {
+    const host = arp(named);
+    CHORD.forEach((p) => host.noteOn(p));
+    host.play(beats);
+    return pitches(host.noteOns());
+  };
+
+  it("Range: the 2-octave cycle repeats the 1-octave notes, then adds the octave above", () => {
+    assert.deepEqual(play(REPORT, 2.9), [55, 60, 62, 64, 55, 60, 62, 64, 67, 72, 74, 76]);
+  });
+
+  it("Transpose: every cycle has the same notes, shifted an octave up on alternate cycles", () => {
+    assert.deepEqual(play(Object.assign({ PARAM_OCT_MODE: 1 }, REPORT), 2.9),
+      [55, 60, 62, 64, 67, 72, 74, 76, 55, 60, 62, 64]);
+  });
+
+  it("Transpose can shift below the base, and keeps Base Octave Range as the cycle span", () => {
+    const notes = play(Object.assign({}, REPORT, {
+      PARAM_OCT_MODE: 1, PARAM_BASE_OCTAVE: 2, PARAM_OCT_SPREAD_DOWN: 1, PARAM_OCT_SPREAD_UP: 0, PARAM_PROG_SHAPE: SHAPE.UP,
+    }), 3.9);
+    // cycle 1: one octave down, spanning 2 octaves (8 notes); cycle 2: at the base
+    assert.deepEqual(notes.slice(0, 8), [43, 48, 50, 52, 55, 60, 62, 64]);
+    assert.deepEqual(notes.slice(8, 16), [55, 60, 62, 64, 67, 72, 74, 76]);
+  });
+
+  it("Transpose drops notes outside the MIDI range", () => {
+    const host = arp(Object.assign({}, PLAIN, { PARAM_OCT_MODE: 1, PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_UP: 3, PARAM_PATTERN: PATTERN.UP }));
+    host.noteOn(120);
+    host.ctx.seriesState.octave.pos = 4; // +3 octaves
+    host.ctx.rebuildSequence();
+    assert.deepEqual(pitches(host.ctx.sequenceNotes), []);
+  });
+});
+
+describe("time-based advance triggers", () => {
+  const CHORD = [55, 60, 62, 64];
+  const BASE = Object.assign({}, PLAIN, {
+    PARAM_PATTERN: PATTERN.AS_PLAYED, PARAM_BASE_SUBDIV: RATE["1/16"],
+    PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_DOWN: 0, PARAM_OCT_SPREAD_UP: 1,
+  });
+  const octavesPerBeat = (named, beats) => {
+    const host = arp(named);
+    CHORD.forEach((p) => host.noteOn(p));
+    host.play(beats);
+    // highest note in each beat: 64 = 1-octave pattern only, 76 = 2-octave pattern present
+    const out = [];
+    for (const n of host.noteOns()) {
+      const beat = Math.floor(n.beat - 1);
+      out[beat] = Math.max(out[beat] || 0, n.pitch);
+    }
+    return out;
+  };
+
+  it("Per Bar: a full bar of each octave range, every bar starting at the top of the pattern", () => {
+    const host = arp(Object.assign({ PARAM_ADVANCE_TRIGGER: TRIGGER.BAR }, BASE));
+    CHORD.forEach((p) => host.noteOn(p));
+    host.play(11.9);
+    const ons = host.noteOns();
+    const bar = (i) => pitches(ons.filter((n) => n.beat >= 1 + 4 * i && n.beat < 5 + 4 * i));
+    assert.deepEqual(bar(0), [55, 60, 62, 64, 55, 60, 62, 64, 55, 60, 62, 64, 55, 60, 62, 64]);
+    assert.deepEqual(bar(1), [55, 60, 62, 64, 67, 72, 74, 76, 55, 60, 62, 64, 67, 72, 74, 76]);
+    assert.deepEqual(bar(2), bar(0));
+  });
+
+  it("Per Bar restarts the pattern at the bar line even mid-cycle", () => {
+    const host = arp(Object.assign({}, BASE, { PARAM_ADVANCE_TRIGGER: TRIGGER.BAR, PARAM_OCT_ACTIVE: 0, PARAM_PATTERN: PATTERN.UP }));
+    [60, 64, 67].forEach((p) => host.noteOn(p)); // 3-note cycle: 16 sixteenths = 5 cycles + 1 note
+    host.play(5.1);
+    const firstOfBar2 = host.noteOns().find((n) => n.beat === 5);
+    assert.equal(firstOfBar2.pitch, 60);
+  });
+
+  it("Per Beat and Per 2 Bars change on their own grid", () => {
+    // Transpose: each beat plays the whole 4-note cycle in alternating registers
+    assert.deepEqual(octavesPerBeat(Object.assign({ PARAM_ADVANCE_TRIGGER: TRIGGER.BEAT, PARAM_OCT_MODE: 1 }, BASE), 3.9), [64, 76, 64, 76]);
+    // Range: the 2-octave cycle (2 beats) is longer than a beat, so the restart at each beat line
+    // cuts it to its first (low) half
+    assert.deepEqual(octavesPerBeat(Object.assign({ PARAM_ADVANCE_TRIGGER: TRIGGER.BEAT }, BASE), 3.9), [64, 64, 64, 64]);
+    assert.deepEqual(octavesPerBeat(Object.assign({ PARAM_ADVANCE_TRIGGER: TRIGGER.TWO_BARS }, BASE), 15.9),
+      // bars 1-2: 1-octave cycles; bars 3-4: 2-octave cycles (low beat, high beat)
+      [64, 64, 64, 64, 64, 64, 64, 64, 64, 76, 64, 76, 64, 76, 64, 76]);
+  });
+
+  it("a chord starting mid-bar keeps its first value until the next bar line", () => {
+    const host = arp(Object.assign({ PARAM_ADVANCE_TRIGGER: TRIGGER.BAR }, BASE));
+    host.play(2);
+    CHORD.forEach((p) => host.noteOn(p, 100, 3.0));
+    host.play(4);
+    const ons = host.noteOns();
+    assert.ok(ons.filter((n) => n.beat < 5).every((n) => n.pitch <= 64), "1-octave until bar 2");
+    assert.ok(ons.some((n) => n.beat >= 5 && n.pitch === 76), "2-octave from bar 2");
+  });
+
+  it("rate changes per bar keep every bar on the grid", () => {
+    const host = arp(Object.assign({}, BASE, {
+      PARAM_ADVANCE_TRIGGER: TRIGGER.BAR, PARAM_OCT_ACTIVE: 0, PARAM_BASE_SUBDIV: RATE["1/8"],
+      PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 1,
+    }));
+    CHORD.forEach((p) => host.noteOn(p));
+    host.play(8.9);
+    const ons = host.noteOns();
+    assert.equal(ons.filter((n) => n.beat < 5).length, 8, "bar 1: 1/8 notes");
+    assert.equal(ons.filter((n) => n.beat >= 5 && n.beat < 9).length, 16, "bar 2: 1/16 notes");
+    assert.equal(ons.find((n) => n.beat >= 5).beat, 5);
   });
 });

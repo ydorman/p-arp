@@ -12,7 +12,9 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
 #### Key Features
 - **Base + Spread series**: Each modulated parameter has a `Base` value (its musical center) plus `Spread (-)` and `Spread (+)` controls that set how far below and above the base the series travels. Moving the base shifts the whole range.
   - **Pattern**: The `Arp Pattern` menu is the base; spread 0–5 steps to neighbouring patterns in menu order (Up, Down, Up/Down, Down/Up, As Played, Random).
-  - **Octave Range**: Base 1–4 octaves, spread 0–3 in each direction (clamped to 1–4).
+  - **Octave Range**: Base 1–4 octaves, spread 0–3 in each direction. `Octave Mode`:
+    - `Range` (default): each series step adds an octave to the cycle (clamped to 1–4), so the cycle gets longer: a 2-octave cycle repeats the 1-octave notes, then adds the octave above.
+    - `Transpose`: the cycle always spans `Base Octave Range` octaves; each step shifts the whole pattern up (or down) an octave, so every cycle has the same number of notes in a different register (up to ±3 octaves).
   - **Subdivision (Rate)**: Base is any of 24 rates from $1/1$ to $1/128$ in straight, dotted and triplet form (menu ordered slowest to fastest: … 1/4, 1/8 dotted, 1/4 triplet, 1/8 …). The series moves in doublings within the base rate's family (1/8 ↔ 1/16, 1/8 triplet ↔ 1/16 triplet, 1/8 dotted ↔ 1/16 dotted). Spread 0–7 doublings slower/faster, clamped to $1/1$ … $1/128$. Dotted rates snap to their pulse grid (1/8 dotted → 1/16 grid).
   - **Gate Length**: Base 10–100%; `Gate Steps (per side)` (1–8, default 4) sets how many steps the series takes below and above the base, and the spread (0–90%) sets the total distance on each side (clamped to 10–100%).
   - **Velocity**: Base 1–127; `Velocity Steps (per side)` (1–8, default 4) sets how many steps the series takes below and above the base, and the spread (0–64) sets the total velocity distance covered on each side. E.g. base 70, spread ±24, 2 steps → 46, 58, 70, 82, 94.
@@ -34,7 +36,9 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - `Random`: a random step on each advance, never the same twice in a row.
   - `Custom`: `Custom Length` (1–8) and `Custom Step 1–8` (each 1–8) in the Custom Series group, e.g. 1, 5, 6, 8.
   - Progression Shape plays the step list forward (`Up`), backward (`Down`) or forward then back (`Up-Down`); `Random` ignores it.
-- **Advance Trigger**: Advance the series once per full arp cycle, or on every note step. The Pattern series always advances per arp cycle (switching patterns on every note just scrambles them).
+- **Advance Trigger**: When the series advance:
+  - `Per Arp Cycle` / `Per Note Step`: after each full pattern sweep, or on every note. The Pattern series always advances per arp cycle (switching patterns on every note just scrambles them).
+  - `Per Beat` / `Per Bar` / `Per 2 Bars`: on the beat/bar grid, regardless of how long each cycle is; the pattern restarts from the top at each boundary. Keeps series that change cycle length (pattern, octave range, rate) aligned with bars and chord changes. A cycle longer than the unit is cut at the boundary (e.g. a 2-octave Range cycle with `Per Beat`).
 - **Humanize**: `Humanize Velocity` (±0–40) and `Humanize Gate` (±0–40%) add random variation to each note on top of the series (velocity clamped to 1–127, gate to 1–100%). Timing stays on the grid.
 - **Arp Patterns**: Up, Down, Up/Down, Down/Up, As Played, Random; chord latch.
 - **Subdiv Change Timing**: How notes are timed when the subdivision changes:

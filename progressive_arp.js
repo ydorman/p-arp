@@ -73,7 +73,7 @@ var PluginParameters = [
   {
     name: "Advance Trigger",
     type: "menu",
-    valueStrings: ["Per Arp Cycle", "Per Note Step"],
+    valueStrings: ["Per Arp Cycle", "Per Note Step", "Per Beat", "Per Bar", "Per 2 Bars"],
     defaultValue: 0 // Per Arp Cycle
   },
   {
@@ -162,6 +162,12 @@ var PluginParameters = [
     maxValue: 3,
     numberOfSteps: 3,
     defaultValue: 1
+  },
+  {
+    name: "Octave Mode",
+    type: "menu",
+    valueStrings: ["Range", "Transpose"],
+    defaultValue: 0 // Range: each step adds an octave to the cycle; Transpose: shifts the cycle
   },
 
   // --- SUBDIVISION SERIES GAUGE ---
@@ -440,38 +446,50 @@ var PARAM_BASE_OCTAVE = 10;
 var PARAM_OCT_ACTIVE = 11;
 var PARAM_OCT_SPREAD_DOWN = 12;
 var PARAM_OCT_SPREAD_UP = 13;
+var PARAM_OCT_MODE = 14;
 
-var PARAM_BASE_SUBDIV = 14;
-var PARAM_SUB_ACTIVE = 15;
-var PARAM_SUB_SPREAD_DOWN = 16;
-var PARAM_SUB_SPREAD_UP = 17;
-var PARAM_SUB_TIMING = 18;
+var PARAM_BASE_SUBDIV = 15;
+var PARAM_SUB_ACTIVE = 16;
+var PARAM_SUB_SPREAD_DOWN = 17;
+var PARAM_SUB_SPREAD_UP = 18;
+var PARAM_SUB_TIMING = 19;
 
-var PARAM_GATE = 19;
-var PARAM_GATE_ACTIVE = 20;
-var PARAM_GATE_SPREAD_DOWN = 21;
-var PARAM_GATE_SPREAD_UP = 22;
-var PARAM_GATE_STEPS = 23;
+var PARAM_GATE = 20;
+var PARAM_GATE_ACTIVE = 21;
+var PARAM_GATE_SPREAD_DOWN = 22;
+var PARAM_GATE_SPREAD_UP = 23;
+var PARAM_GATE_STEPS = 24;
 
-var PARAM_VEL_BASE = 24;
-var PARAM_VEL_ACTIVE = 25;
-var PARAM_VEL_SPREAD_DOWN = 26;
-var PARAM_VEL_SPREAD_UP = 27;
-var PARAM_VEL_STEPS = 28;
+var PARAM_VEL_BASE = 25;
+var PARAM_VEL_ACTIVE = 26;
+var PARAM_VEL_SPREAD_DOWN = 27;
+var PARAM_VEL_SPREAD_UP = 28;
+var PARAM_VEL_STEPS = 29;
 
-var PARAM_SWING = 29;
-var PARAM_SWING_ACTIVE = 30;
-var PARAM_SWING_SPREAD_DOWN = 31;
-var PARAM_SWING_SPREAD_UP = 32;
-var PARAM_SWING_STEPS = 33;
+var PARAM_SWING = 30;
+var PARAM_SWING_ACTIVE = 31;
+var PARAM_SWING_SPREAD_DOWN = 32;
+var PARAM_SWING_SPREAD_UP = 33;
+var PARAM_SWING_STEPS = 34;
 
-var PARAM_HUMANIZE_VEL = 34;
-var PARAM_HUMANIZE_GATE = 35;
+var PARAM_HUMANIZE_VEL = 35;
+var PARAM_HUMANIZE_GATE = 36;
 
-var PARAM_CUSTOM_LENGTH = 36;
-var PARAM_CUSTOM_STEP_1 = 37; // Custom Step 1..8 are consecutive
+var PARAM_CUSTOM_LENGTH = 37;
+var PARAM_CUSTOM_STEP_1 = 38; // Custom Step 1..8 are consecutive
 
-var PARAM_DEBUG = 45;
+var PARAM_DEBUG = 46;
+
+// Advance Trigger menu
+var TRIGGER_CYCLE = 0;
+var TRIGGER_STEP = 1;
+var TRIGGER_BEAT = 2;
+var TRIGGER_BAR = 3;
+var TRIGGER_TWO_BARS = 4;
+
+// Octave Mode menu
+var OCTAVE_RANGE = 0;
+var OCTAVE_TRANSPOSE = 1;
 
 // Series Curve menu
 var CURVE_LINEAR = 0;
@@ -505,7 +523,8 @@ var chordStartBeat = -1;       // Beat position of the note that started the cur
 // A chord played up to this late after a grid line still starts on that line (its first note
 // plays immediately) instead of waiting for the next one. 1/64 note = ~31 ms at 120 BPM.
 var CHORD_LATE_TOLERANCE = 0.0625;     // null | "chord" | "rate" | "beat": snap the next note to a grid before playing it
-var swingStepCount = 0;        // Note counter for swing pairing (odd = off-beat)
+var swingStepCount = 0;
+var lastAdvanceBoundary = null; // Beat/bar index of the last time-based advance (null = start fresh)        // Note counter for swing pairing (odd = off-beat)
 var wasPlaying = false;
 var lastBlockStartBeat = -1;   // Track previous block to detect loop wraps
 var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNoteOffBeat }
@@ -523,6 +542,7 @@ var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNot
 //                Position = k (0 is exactly the base). A side with zero spread has no steps.
 //
 // baseOffset converts the base parameter to a series value (0 when the menu index is the value).
+// Optional limits() overrides minValue / maxValue when they depend on other parameters.
 // Optional baseToPos / posToValue map between the base parameter, series positions and the
 // parameter value for range series whose positions are not the values themselves.
 // cycleOnly series advance only at the end of an arp cycle, even when Advance Trigger is
@@ -537,7 +557,15 @@ var SERIES = {
   octave: {
     kind: "range", baseParam: PARAM_BASE_OCTAVE, baseOffset: 0, activeParam: PARAM_OCT_ACTIVE,
     spreadDownParam: PARAM_OCT_SPREAD_DOWN, spreadUpParam: PARAM_OCT_SPREAD_UP,
-    minValue: 1, maxValue: 4 // octaves
+    minValue: 1, maxValue: 4, // octaves (Range mode)
+    // Transpose mode: the value is base + an octave offset of up to 3 either way
+    limits: function() {
+      if (GetParameter(PARAM_OCT_MODE) === OCTAVE_TRANSPOSE) {
+        var base = GetParameter(PARAM_BASE_OCTAVE);
+        return { min: base - 3, max: base + 3 };
+      }
+      return { min: 1, max: 4 };
+    }
   },
   subdiv: {
     kind: "range", baseParam: PARAM_BASE_SUBDIV, baseOffset: 0, activeParam: PARAM_SUB_ACTIVE,
@@ -626,7 +654,7 @@ function fmtParamValue(index) {
 var SETTINGS_GROUPS = [
   [PARAM_LATCH, PARAM_ADVANCE_TRIGGER, PARAM_PROG_SHAPE, PARAM_LINK, PARAM_GLOBAL_RANGE, PARAM_CURVE],
   [PARAM_PATTERN, PARAM_PAT_ACTIVE, PARAM_PAT_SPREAD_DOWN, PARAM_PAT_SPREAD_UP],
-  [PARAM_BASE_OCTAVE, PARAM_OCT_ACTIVE, PARAM_OCT_SPREAD_DOWN, PARAM_OCT_SPREAD_UP],
+  [PARAM_BASE_OCTAVE, PARAM_OCT_ACTIVE, PARAM_OCT_SPREAD_DOWN, PARAM_OCT_SPREAD_UP, PARAM_OCT_MODE],
   [PARAM_BASE_SUBDIV, PARAM_SUB_ACTIVE, PARAM_SUB_SPREAD_DOWN, PARAM_SUB_SPREAD_UP, PARAM_SUB_TIMING],
   [PARAM_GATE, PARAM_GATE_ACTIVE, PARAM_GATE_SPREAD_DOWN, PARAM_GATE_SPREAD_UP, PARAM_GATE_STEPS],
   [PARAM_VEL_BASE, PARAM_VEL_ACTIVE, PARAM_VEL_SPREAD_DOWN, PARAM_VEL_SPREAD_UP, PARAM_VEL_STEPS],
@@ -762,10 +790,11 @@ function getSeriesBounds(name) {
     };
   }
   var base = def.baseToPos ? def.baseToPos(GetParameter(def.baseParam)) : getSeriesBase(name);
+  var limits = def.limits ? def.limits() : { min: def.minValue, max: def.maxValue };
   return {
-    minPos: Math.max(def.minValue, base - spreadDown),
+    minPos: Math.max(limits.min, base - spreadDown),
     basePos: base,
-    maxPos: Math.min(def.maxValue, base + spreadUp)
+    maxPos: Math.min(limits.max, base + spreadUp)
   };
 }
 
@@ -878,6 +907,16 @@ function resetSeriesState() {
   if (isCurveActive()) {
     resetCurve();
   }
+  lastAdvanceBoundary = null; // time-based triggers start counting from the next note
+}
+
+// Length in beats of a time-based Advance Trigger unit, or 0 for cycle/step triggers
+function getAdvanceUnitBeats() {
+  var trigger = GetParameter(PARAM_ADVANCE_TRIGGER);
+  if (trigger === TRIGGER_BEAT) return 1.0;
+  if (trigger === TRIGGER_BAR) return beatsPerBar;
+  if (trigger === TRIGGER_TWO_BARS) return 2 * beatsPerBar;
+  return 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -1056,7 +1095,7 @@ function advanceRestartTogether(isCycleEnd) {
   advanceIndependent(isCycleEnd);
   // The longest pass among the series that advance on every trigger (cycleOnly series advance
   // at a different rate with Per Note Step, so they only restart along with the others)
-  var perStep = (GetParameter(PARAM_ADVANCE_TRIGGER) === 1);
+  var perStep = (GetParameter(PARAM_ADVANCE_TRIGGER) === TRIGGER_STEP);
   var longest = 0;
   for (var i = 0; i < SERIES_NAMES.length; i++) {
     var name = SERIES_NAMES[i];
@@ -1101,8 +1140,15 @@ function rebuildSequence() {
     return;
   }
 
-  // Determine current octave count
+  // Octave Range: the series sets how many octaves the cycle spans.
+  // Octave Transpose: the cycle always spans Base Octave Range octaves, shifted by the series'
+  // offset from the base (same number of notes every cycle, different register).
   var octaves = getSeriesValue("octave");
+  var transpose = 0;
+  if (GetParameter(PARAM_OCT_MODE) === OCTAVE_TRANSPOSE) {
+    transpose = (octaves - GetParameter(PARAM_BASE_OCTAVE)) * 12;
+    octaves = GetParameter(PARAM_BASE_OCTAVE);
+  }
 
   // Sort notes by pitch for standard patterns
   var pattern = getSeriesValue("pattern");
@@ -1114,8 +1160,8 @@ function rebuildSequence() {
   var expanded = [];
   for (var oct = 0; oct < octaves; oct++) {
     for (var i = 0; i < baseNotes.length; i++) {
-      var transposedPitch = baseNotes[i].pitch + (oct * 12);
-      if (transposedPitch <= 127) {
+      var transposedPitch = baseNotes[i].pitch + (oct * 12) + transpose;
+      if (transposedPitch >= 0 && transposedPitch <= 127) {
         expanded.push({
           pitch: transposedPitch,
           velocity: baseNotes[i].velocity
@@ -1378,6 +1424,30 @@ function ProcessMIDI() {
       }
     }
 
+    // Time-based Advance Trigger (Per Beat / Bar / 2 Bars): when this note is the first in a new
+    // beat/bar, advance the series and restart the pattern from the top, then re-evaluate this
+    // note with the new values (its rate and grid may have changed)
+    var unitBeats = getAdvanceUnitBeats();
+    if (unitBeats > 0) {
+      var boundary = Math.floor((nextBeatToSchedule - 1.0) / unitBeats + 1e-6);
+      if (lastAdvanceBoundary === null || boundary < lastAdvanceBoundary) {
+        lastAdvanceBoundary = boundary;
+      } else if (boundary > lastAdvanceBoundary) {
+        lastAdvanceBoundary = boundary;
+        var unitCompleted = advanceProgressions(true);
+        if (unitCompleted.subdiv) {
+          log("PASS subdivision series completed a pass" + (timingMode === TIMING_FLOW ? " -> realign to beat" : ""));
+        }
+        currentStepIndex = 0;
+        rebuildSequence();
+        log("ADVANCE " + (unitBeats === 1.0 ? "beat" : "bar") + " boundary " + fmtBeat(nextBeatToSchedule));
+        if (unitCompleted.subdiv && timingMode === TIMING_FLOW) {
+          pendingRealign = "beat";
+        }
+        continue;
+      }
+    }
+
     // B. Apply swing: the grid pointer stays on the straight grid; only this note's timing moves
     // (never in the past: a chord that started on a grid line just before this block plays now).
     // A note is only sent in the block where it starts: if swing pushes it past this block, wait.
@@ -1444,7 +1514,7 @@ function ProcessMIDI() {
     }
 
     // G. Advance step index
-    var advanceTrigger = GetParameter(PARAM_ADVANCE_TRIGGER); // 0 = Per Cycle, 1 = Per Step
+    var advanceTrigger = GetParameter(PARAM_ADVANCE_TRIGGER);
     var isCycleEnd = false;
 
     currentStepIndex++;
@@ -1467,7 +1537,7 @@ function ProcessMIDI() {
     }
 
     // I. Advance arithmetic series; realign to the beat when the subdivision series starts over
-    if (advanceTrigger === 1 || isCycleEnd) { // Per Note Step, or Per Arp Cycle at cycle end
+    if (advanceTrigger === TRIGGER_STEP || (advanceTrigger === TRIGGER_CYCLE && isCycleEnd)) {
       var completed = advanceProgressions(isCycleEnd);
       if (completed.subdiv) {
         log("PASS subdivision series completed a pass" + (timingMode === TIMING_FLOW ? " -> realign to beat" : ""));
