@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SARP Spike</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>SARP <span>spike</span></header>
+  <main>
+    <section class="knob-wrap">
+      <svg id="knob" viewBox="0 0 100 100" aria-label="Test Knob">
+        <circle class="track" cx="50" cy="50" r="38"></circle>
+        <path id="arc" class="arc" d=""></path>
+        <line id="pointer" class="pointer" x1="50" y1="50" x2="50" y2="18"></line>
+      </svg>
+      <div class="label">Test Knob</div>
+      <div id="knob-value" class="value">–</div>
+    </section>
+    <section class="engine">
+      <div><span class="k">Notes passed</span><span id="notes" class="v">0</span></div>
+      <div><span class="k">Transport</span><span id="playing" class="v">stopped</span></div>
+      <div><span class="k">Tempo</span><span id="bpm" class="v">–</span></div>
+      <div><span class="k">Position (beats)</span><span id="ppq" class="v">–</span></div>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
