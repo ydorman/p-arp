@@ -3,7 +3,8 @@ add_executable(parp_engine_tests
     EngineTests.cpp
     ProgressionTests.cpp
     SequenceTests.cpp
-    SchedulerTests.cpp)
+    SchedulerTests.cpp
+    ParameterTests.cpp)
 
 target_link_libraries(parp_engine_tests PRIVATE parp_engine)
 

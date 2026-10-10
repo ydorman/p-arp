@@ -10,8 +10,14 @@ ui/       React + TypeScript + Vite UI (JUCE's JS bridge vendored in ui/src/juce
 ```
 
 Plugin identity (Logic projects refer to these; keep stable): manufacturer `Ydrm`, plugin `Parp`,
-type `aumi`, bundle id `com.ydorman.p-arp`. Parameter IDs (e.g. `globalRange`) are saved in
-projects and automation: never rename one.
+type `aumi`, bundle id `com.ydorman.p-arp`.
+
+**Parameters** are defined once, in the engine's parameter table (`engine/src/Parameters.cpp`):
+stable ID, display name, group, type, range, unit, menu choices and the `Settings` field it maps
+to. The plugin builds its 46 host parameters from it (grouped; Logic shows the groups as
+submenus) and copies their values into the engine's `Settings` once per block. IDs are saved in
+projects and automation: never change or reuse one (names can change). Adding a setting: add the
+`Settings` field and its table row.
 
 ## Prerequisites
 

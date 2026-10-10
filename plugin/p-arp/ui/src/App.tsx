@@ -8,7 +8,7 @@ export function App() {
     <div className="app">
       <header className="header">
         <span className="logo">p-arp</span>
-        <span className="tag">progressive arpeggiator · engine: ported · default settings</span>
+        <span className="tag">progressive arpeggiator · 46 parameters · UI in progress (use Logic's Controls view)</span>
       </header>
       <main className="main">
         <section className="panel">

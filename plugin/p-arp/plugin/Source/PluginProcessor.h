@@ -2,10 +2,12 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <parp/Engine.h>
+#include <parp/Parameters.h>
 #include <atomic>
 #include <vector>
 
-// Parameter IDs: stable strings (saved in projects and automation). Never rename an ID.
+// Parameter IDs used directly by the plugin layer. All parameters are defined once in the engine's
+// parameter table (parp::parameterSpecs); IDs are saved in projects and automation: never rename.
 namespace ParamID
 {
     inline constexpr const char* globalRange = "globalRange";
@@ -56,9 +58,10 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     parp::Transport readTransport();
+    parp::Settings readSettings() const;
 
     parp::Engine engine;
-    std::atomic<float>* globalRangeParam = nullptr; // parameter value, read once per block
+    std::vector<std::atomic<float>*> parameterValues; // same order as parp::parameterSpecs()
     std::vector<parp::MidiEvent> engineIn, engineOut; // preallocated in prepareToPlay
     juce::MidiBuffer passThrough;                     // non-note MIDI bypasses the engine
 

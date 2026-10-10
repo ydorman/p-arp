@@ -28,6 +28,12 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   after it ("Parameters were changed. This may have affected existing automation data.").
   A real plugin should use stable parameter IDs.
 - **Note naming:** Logic uses C3 = MIDI 60.
+- **AU parameter order (JUCE):** JUCE's AU wrapper sorts the parameter list by version hint, then by
+  the AU parameter ID (a hash of the text ID), so with equal version hints Logic's Controls view
+  and automation menus come out scrambled. p-arp sets each parameter's version hint to its position
+  in the parameter table, which gives the table's order. The AU ID depends only on the text ID, so
+  reordering never breaks saved projects. (`JUCE_FORCE_USE_LEGACY_PARAM_IDS` would also give the
+  order, but makes IDs positional - the Scripter problem again.)
 - **Capturing output as MIDI:** a second software instrument track with **Internal MIDI In** set
   to the SARP track records the generated notes in real time. "Record MIDI to Track Here" on the
   sending track is *not* needed when the source notes come from a region (user-verified).

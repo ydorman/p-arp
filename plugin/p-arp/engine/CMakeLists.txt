@@ -1,6 +1,7 @@
 # p-arp engine: the arpeggiator itself, independent of JUCE and of any plugin format.
 add_library(parp_engine STATIC
     src/Engine.cpp
+    src/Parameters.cpp
     src/Progression.cpp
     src/Rates.cpp
     src/Sequence.cpp)

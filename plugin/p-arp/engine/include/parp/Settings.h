@@ -20,6 +20,7 @@ inline constexpr int maxCustomSteps = 8;
 
 // Every user setting, as plain values. The plugin layer fills this from its parameters once per
 // block; the engine never reads parameters directly. Defaults match the Scripter prototype.
+// Adding a field? Add its row to the parameter table (Parameters.cpp) too.
 struct Settings
 {
     // Global
