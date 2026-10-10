@@ -518,13 +518,14 @@ var latchedNotes = [];         // Notes kept when latch is on
 var sequenceNotes = [];        // Expanded notes for current cycle
 var currentStepIndex = 0;
 var nextBeatToSchedule = 0;
-var pendingRealign = null;
+var pendingRealign = null;     // null | "chord" | "rate" | "beat": snap the next note to a grid before playing it
 var chordStartBeat = -1;       // Beat position of the note that started the current chord
 // A chord played up to this late after a grid line still starts on that line (its first note
 // plays immediately) instead of waiting for the next one. 1/64 note = ~31 ms at 120 BPM.
-var CHORD_LATE_TOLERANCE = 0.0625;     // null | "chord" | "rate" | "beat": snap the next note to a grid before playing it
-var swingStepCount = 0;
-var lastAdvanceBoundary = null; // Beat/bar index of the last time-based advance (null = start fresh)        // Note counter for swing pairing (odd = off-beat)
+var CHORD_LATE_TOLERANCE = 0.0625;
+var swingStepCount = 0;        // Note counter for swing pairing (odd = off-beat)
+var lastAdvanceBoundary = null; // Beat/bar index of the last time-based advance (null = start fresh)
+var lastLateOnset = -1;        // A note played late (immediately); the next note must come after it
 var wasPlaying = false;
 var lastBlockStartBeat = -1;   // Track previous block to detect loop wraps
 var activeSoundingPitches = {};// Currently ringing notes: { pitch: scheduledNoteOffBeat }
@@ -1414,6 +1415,11 @@ function ProcessMIDI() {
       var gridLength = (pendingRealign === "beat") ? Math.max(1.0, stepGrid) : stepGrid;
       var beforeAlign = nextBeatToSchedule;
       alignSchedule(nextBeatToSchedule, gridLength, stepBeatDuration);
+      // After a late (immediately played) note, resync to a grid line after it, never onto it
+      if (lastLateOnset >= 0 && nextBeatToSchedule <= lastLateOnset + 1e-9) {
+        alignSchedule(lastLateOnset + gridLength * 0.5, gridLength, stepBeatDuration);
+      }
+      lastLateOnset = -1;
       if (pendingRealign || nextBeatToSchedule - beforeAlign > 1e-6) {
         log("ALIGN " + (pendingRealign || "snap") + " " + beforeAlign.toFixed(3) + " -> " + fmtBeat(nextBeatToSchedule) +
             " (grid " + gridLength.toFixed(4) + " beats)");
@@ -1534,6 +1540,7 @@ function ProcessMIDI() {
       log("ALIGN behind " + nextBeatToSchedule.toFixed(3) + " -> resync from " + fmtBeat(info.blockStartBeat));
       nextBeatToSchedule = info.blockStartBeat;
       pendingRealign = "rate";
+      lastLateOnset = noteOnBeat;
     }
 
     // I. Advance arithmetic series; realign to the beat when the subdivision series starts over
@@ -1601,5 +1608,6 @@ function Reset() {
   currentStepIndex = 0;
   wasPlaying = false;
   lastBlockStartBeat = -1;
+  lastLateOnset = -1;
   resetSeriesState();
 }

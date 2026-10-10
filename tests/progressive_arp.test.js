@@ -1084,6 +1084,19 @@ describe("note bursts (regression: +10 dB pop on the second loop pass)", () => {
     assert.deepEqual(late, [], `ghost note(s) after release: ${late.map((n) => n.beat)}`);
   });
 
+  it("a chord exactly on a grid line at a fast rate plays its first note once", () => {
+    // The late-chord tolerance lines up 1/16 beat early, which at 1/128 (1/32 beat) is two grid
+    // lines back: the first note plays late (immediately), and the resync must not land on the
+    // chord's own grid line again (found while porting to C++)
+    const host = arp(Object.assign({}, PLAIN, { PARAM_BASE_SUBDIV: RATE["1/128"] }));
+    host.play(1);
+    host.noteOn(55, 100, 2.0);
+    host.noteOn(62, 100, 2.0);
+    host.play(0.125);
+    assert.deepEqual(beats(host.noteOns()), [2, 2.03125, 2.0625, 2.09375]);
+    assert.deepEqual(pitches(host.noteOns()), [55, 62, 55, 62]);
+  });
+
   it("never starts two notes at the same instant (randomized sessions)", () => {
     const rand = seededRandom(42);
     const pick = (arr) => arr[Math.floor(rand() * arr.length)];
