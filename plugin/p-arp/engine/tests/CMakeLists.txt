@@ -1,6 +1,7 @@
 add_executable(parp_engine_tests
     test_main.cpp
-    EngineTests.cpp)
+    EngineTests.cpp
+    ProgressionTests.cpp)
 
 target_link_libraries(parp_engine_tests PRIVATE parp_engine)
 

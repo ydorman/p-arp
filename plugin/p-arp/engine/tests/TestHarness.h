@@ -40,6 +40,15 @@ inline int& failedChecks()
     return count;
 }
 
+template <typename T>
+std::ostream& operator<< (std::ostream& stream, const std::vector<T>& values)
+{
+    stream << "[";
+    for (size_t i = 0; i < values.size(); ++i)
+        stream << (i > 0 ? ", " : "") << values[i];
+    return stream << "]";
+}
+
 template <typename A, typename B>
 void checkEqual (const A& actual, const B& expected, const char* expr, const char* file, int line, bool fatal)
 {

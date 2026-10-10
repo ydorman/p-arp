@@ -29,7 +29,11 @@ user-facing name **p-arp**. `plugin/spike/` is the (validated) architecture spik
   dependencies. Keep it self-contained.
 - Tests: `npm test` (Node built-in runner, no deps). `tests/scripter_mock.js` fakes Scripter and
   simulates host playback (blocks, cycle wraps incl. straddling blocks, `beatPos`).
-- For every bug fix, add a regression test and confirm it **fails without the fix**.
+- For every bug fix, add a regression test and confirm it **fails without the fix**. In the C++
+  engine, force a rebuild when checking this (`cmake --build build-tests --clean-first`): an edit
+  in the same second as the last build can be skipped by make, silently testing stale code.
+- Plugin engine port (`plugin/p-arp/engine`): port the Node tests alongside each piece with the same
+  inputs and expected values; use `jsRound` where the prototype used `Math.round`.
 - Keep the "parameter constants" test in sync when adding controls (it checks every `PARAM_`
   constant against its control name). Inserting controls shifts indices: renumber carefully
   (names can contain digits, e.g. `PARAM_CUSTOM_STEP_1`).
