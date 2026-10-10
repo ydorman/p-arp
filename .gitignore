@@ -10,3 +10,4 @@ plugin/**/build/
 plugin/**/build-*/
 plugin/**/node_modules/
 plugin/**/dist/
+plugin/**/*.tsbuildinfo
