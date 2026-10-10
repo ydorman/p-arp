@@ -98,6 +98,9 @@ public:
     const SeriesPosition& position (SeriesId id) const { return positions[(size_t) id]; }
     int curveIndex() const { return curve.index; }
 
+    // Number of full restarts so far (lets callers notice a restart caused by a settings change)
+    unsigned resetCount() const { return resets; }
+
 private:
     void resetSeries (SeriesId id, const Settings& s);
     SeriesSet advanceIndependent (const Settings& s, bool isCycleEnd);
@@ -119,6 +122,7 @@ private:
     static int passLength (SeriesId id, Shape shape, const Settings& s);
 
     Random& rng;
+    unsigned resets = 0;
     std::array<SeriesPosition, numSeries> positions {};
     struct { int pos = 0; int dir = 1; int count = 0; } link;
     struct { int index = 0; int dir = 1; int lastRandom = -1; } curve;

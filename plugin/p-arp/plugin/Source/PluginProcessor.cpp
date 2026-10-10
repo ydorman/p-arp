@@ -10,6 +10,7 @@ ParpProcessor::ParpProcessor()
     : AudioProcessor (BusesProperties()), // MIDI effect: no audio buses
       state (*this, nullptr, "ParpState", createParameterLayout())
 {
+    globalRangeParam = state.getRawParameterValue (ParamID::globalRange);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ParpProcessor::createParameterLayout()
@@ -87,6 +88,11 @@ void ParpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
             passThrough.addEvent (message, metadata.samplePosition);
         }
     }
+
+    // Parameters -> engine settings (the rest of the settings keep their defaults for now)
+    auto settings = engine.settings();
+    settings.globalRange = (int) std::lround (globalRangeParam->load (std::memory_order_relaxed));
+    engine.setSettings (settings);
 
     engine.process (transport, buffer.getNumSamples(), engineIn, engineOut);
 

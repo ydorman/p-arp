@@ -8,7 +8,7 @@ export function App() {
     <div className="app">
       <header className="header">
         <span className="logo">p-arp</span>
-        <span className="tag">progressive arpeggiator · engine: pass-through</span>
+        <span className="tag">progressive arpeggiator · engine: ported · default settings</span>
       </header>
       <main className="main">
         <section className="panel">

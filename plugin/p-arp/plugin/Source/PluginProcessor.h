@@ -58,6 +58,7 @@ private:
     parp::Transport readTransport();
 
     parp::Engine engine;
+    std::atomic<float>* globalRangeParam = nullptr; // parameter value, read once per block
     std::vector<parp::MidiEvent> engineIn, engineOut; // preallocated in prepareToPlay
     juce::MidiBuffer passThrough;                     // non-note MIDI bypasses the engine
 

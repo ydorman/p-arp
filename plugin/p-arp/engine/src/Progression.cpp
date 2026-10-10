@@ -286,6 +286,7 @@ void Progression::resetSeries (SeriesId id, const Settings& s)
 
 void Progression::reset (const Settings& s)
 {
+    ++resets;
     for (auto id : allSeries)
         resetSeries (id, s);
     const auto range = linkRange (s);

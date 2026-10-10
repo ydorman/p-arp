@@ -17,64 +17,40 @@ MidiEvent noteOn (int offset, int note, int velocity = 100)
     return e;
 }
 
-MidiEvent noteOff (int offset, int note)
-{
-    MidiEvent e;
-    e.type = MidiEvent::Type::NoteOff;
-    e.sampleOffset = offset;
-    e.note = note;
-    return e;
-}
-
-std::vector<MidiEvent> makeOut()
+std::vector<MidiEvent> makeOut (size_t capacity = Engine::maxEventsPerBlock)
 {
     std::vector<MidiEvent> out;
-    out.reserve (Engine::maxEventsPerBlock);
+    out.reserve (capacity);
     return out;
 }
 } // namespace
 
-TEST_CASE ("pass-through: events come out unchanged, in order")
+TEST_CASE ("engine: incoming notes are consumed (the arp generates the output)")
 {
     Engine engine;
     engine.prepare (48000.0, 512);
-    const std::vector<MidiEvent> in { noteOn (0, 60), noteOn (10, 64, 90), noteOff (300, 60) };
+    const std::vector<MidiEvent> in { noteOn (0, 60), noteOn (10, 64, 90) };
     auto out = makeOut();
-    engine.process (Transport {}, 512, in, out);
-
-    REQUIRE_EQ (out.size(), in.size());
-    for (size_t i = 0; i < in.size(); ++i)
-    {
-        CHECK (out[i].type == in[i].type);
-        CHECK_EQ (out[i].sampleOffset, in[i].sampleOffset);
-        CHECK_EQ (out[i].note, in[i].note);
-        CHECK_EQ (out[i].velocity, in[i].velocity);
-    }
-}
-
-TEST_CASE ("status counts note-ons; reset clears it")
-{
-    Engine engine;
-    engine.prepare (48000.0, 512);
-    const std::vector<MidiEvent> in { noteOn (0, 60), noteOn (5, 64), noteOff (100, 60) };
-    auto out = makeOut();
-    engine.process (Transport {}, 512, in, out);
+    engine.process (Transport {}, 512, in, out); // transport stopped: nothing plays
+    CHECK_EQ (out.size(), size_t (0));
     CHECK_EQ (engine.status().noteOnsIn, 2);
-    CHECK_EQ (engine.status().noteOnsOut, 2);
     engine.reset();
     CHECK_EQ (engine.status().noteOnsIn, 0);
 }
 
-TEST_CASE ("never grows the output buffer (no allocation on the audio thread)")
+TEST_CASE ("engine: never grows the output buffer (no allocation on the audio thread)")
 {
     Engine engine;
-    engine.prepare (48000.0, 512);
-    std::vector<MidiEvent> in;
-    for (int i = 0; i < Engine::maxEventsPerBlock + 50; ++i)
-        in.push_back (noteOn (i % 512, 60));
-    auto out = makeOut();
+    auto settings = engine.settings();
+    settings.baseRate = parp::rateIndex ("1/128 triplet"); // ~1150 notes in this block
+    engine.setSettings (settings);
+    engine.prepare (48000.0, 24000);
+    const std::vector<MidiEvent> in { noteOn (0, 60) };
+    Transport transport;
+    transport.playing = true;
+    auto out = makeOut (16);
     const auto capacity = out.capacity();
-    engine.process (Transport {}, 512, in, out);
+    engine.process (transport, 24000, in, out);
     CHECK_EQ (out.capacity(), capacity);
     CHECK_EQ (out.size(), capacity);
 }

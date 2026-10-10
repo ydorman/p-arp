@@ -133,6 +133,26 @@ TypeScript + Vite UI embedded as a zip in release builds, loaded from the Vite d
 up new C++ code (AU code stays loaded in-process); UI changes don't need it with the dev build.
 Next: step 2, port the Scripter engine piece by piece with its tests.
 
+### Engine port (step 2)
+
+Ported to `plugin/p-arp/engine` with the Node tests alongside (same inputs/expected values):
+rates + settings + series system (`Progression`), patterns + chord tracking (`Sequence`), and the
+scheduler (`Engine`). Test host: `engine/tests/HostSim.h` (48 kHz / 120 BPM = 24000 samples per
+beat, so grid positions are whole samples). Differences from the prototype, all deliberate:
+
+- **Own note-off queue** instead of `sendAtBeat`; note-ons only in the block where they start.
+  "Stop all sounding notes" flushes the queue, so a sounding note gets exactly one note-off.
+- **Incoming notes act at their exact sample**: blocks are processed in segments split at each
+  incoming event (Scripter applied a block's input before scheduling it).
+- **Output order**: sorted by sample, note-offs before note-ons at the same sample; every note
+  is at least 1 sample long.
+- **Boundary tolerance** (`beatEpsilon`): a note exactly on a block boundary belongs to the next
+  block (floating-point slack made timing depend on block size by 1 sample).
+- **Late-note resync fix**: after a late (immediately played) note, the schedule resyncs to a grid
+  line *after* it. At rates faster than the 1/16-beat chord tolerance (1/64, 1/128) a chord
+  exactly on a grid line otherwise played two notes at the same instant. The Scripter prototype
+  has the same latent flaw (rarely triggered there because its chords arrived off-grid).
+
 Environment notes: Xcode is installed at `/Applications/Xcode.app` but `xcode-select` points at the
 Command Line Tools - build with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` rather
 than changing the system setting. CMake is needed (via Homebrew). The user has an older JUCE
