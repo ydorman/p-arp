@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/knob.tsx","./src/hooks/useenginestatus.ts","./src/hooks/usesliderparam.ts","./src/juce/index.d.ts","./vite.config.ts"],"version":"5.9.3"}

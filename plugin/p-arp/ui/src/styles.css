@@ -1,0 +1,135 @@
+:root {
+  --bg: #15171c;
+  --panel: #1e2128;
+  --text: #e6e8ee;
+  --muted: #8a90a0;
+  --accent: #6cc4ff;
+  --track: #2c313b;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.logo {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.tag {
+  color: var(--muted);
+}
+
+.main {
+  display: flex;
+  gap: 16px;
+  padding: 0 18px 18px;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.knob {
+  width: 120px;
+  text-align: center;
+}
+
+.knob svg {
+  width: 96px;
+  height: 96px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.knob-track {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 8;
+}
+
+.knob-arc {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.knob-pointer {
+  stroke: var(--text);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.knob-label {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.knob-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+}
+
+.status {
+  flex: 1;
+  max-width: 320px;
+}
+
+.status dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.status dt {
+  color: var(--muted);
+}
+
+.status dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

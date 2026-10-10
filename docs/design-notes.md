@@ -124,6 +124,15 @@ Goal: de-risk AU MIDI FX + web view in Logic before building anything else.
 user (MIDI pass-through, live transport in the UI, knob/automation binding, multiple instances).
 The AU MIDI FX + web view architecture is validated. Code: `plugin/spike/`.
 
+### Real plugin project (step 1, 2026-10-10)
+
+`plugin/p-arp/`: engine (pure C++20 + dependency-free test harness), JUCE AU MIDI FX shell
+(manufacturer `Ydrm`, plugin `Parp`, product "p-arp"; parameter IDs are stable strings), React +
+TypeScript + Vite UI embedded as a zip in release builds, loaded from the Vite dev server in
+`PARP_UI_DEV_SERVER=ON` builds (hot reload inside Logic, verified). Logic must be restarted to pick
+up new C++ code (AU code stays loaded in-process); UI changes don't need it with the dev build.
+Next: step 2, port the Scripter engine piece by piece with its tests.
+
 Environment notes: Xcode is installed at `/Applications/Xcode.app` but `xcode-select` points at the
 Command Line Tools - build with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` rather
 than changing the system setting. CMake is needed (via Homebrew). The user has an older JUCE

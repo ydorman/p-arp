@@ -7,3 +7,6 @@
 
 # Plugin build output
 plugin/**/build/
+plugin/**/build-*/
+plugin/**/node_modules/
+plugin/**/dist/
