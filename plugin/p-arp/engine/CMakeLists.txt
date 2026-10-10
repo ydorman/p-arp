@@ -2,7 +2,8 @@
 add_library(parp_engine STATIC
     src/Engine.cpp
     src/Progression.cpp
-    src/Rates.cpp)
+    src/Rates.cpp
+    src/Sequence.cpp)
 
 target_include_directories(parp_engine PUBLIC include)
 target_compile_features(parp_engine PUBLIC cxx_std_20)
