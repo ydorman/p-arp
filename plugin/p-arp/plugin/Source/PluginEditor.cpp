@@ -45,7 +45,15 @@ ParpEditor::ParpEditor (ParpProcessor& p)
 #else
     browser.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
 #endif
-    setSize (900, 560);
+    // Fixed layout (like a hardware panel): the UI is designed at 1000 x 640 and scales
+    // proportionally when the window is resized; aspect ratio locked, 75% .. 150%
+    setResizable (true, true);
+    if (auto* constrainer = getConstrainer())
+    {
+        constrainer->setFixedAspectRatio (1000.0 / 640.0);
+        constrainer->setSizeLimits (750, 480, 1500, 960);
+    }
+    setSize (1000, 640);
     startTimerHz (30);
 }
 

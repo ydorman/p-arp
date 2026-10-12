@@ -112,6 +112,10 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
 - **Porting the engine:** the Scripter engine maps onto `processBlock` (MIDI + host transport per
   block). New work: sample-offset scheduling and an own event queue; stable parameter IDs; state
   save/restore. The Node test suite and replay logs are the behavioral spec to port against.
+- **Fixed layout, proportional zoom:** like a hardware panel, the UI is designed at one size
+  (1000 x 640) and never reflows or wraps; resizing the plugin window (aspect ratio locked,
+  75%-150%) scales the whole panel. Chosen over web-style reflow (positions moving around) and
+  scrollbars; matches Logic's own plugins (Decapitator-style non-resizable is the simpler variant).
 - **GUI ideas to tame ~47 controls:** one panel per target with a single on/off; Global Range,
   Link Series and Series Curve as the main "performance" controls; Custom Series as a visual step
   editor; series visualizer with playhead; debug/humanize in an advanced panel.
