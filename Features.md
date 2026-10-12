@@ -62,5 +62,6 @@ When playing a C major chord ($C_4 - E_4 - G_4$):
 14. ✅ **Octave Transpose mode**: `Octave Mode` = Range (cycle grows by an octave per step) or Transpose (cycle keeps its length and shifts register), so octave modulation can alternate low/high phrases of equal length. *(Status: Implemented)*
 15. ✅ **Time-based advance triggers**: `Advance Trigger` adds Per Beat / Per Bar / Per 2 Bars, so series whose values change cycle length (pattern, octave range, rate) stay aligned with bars; the pattern restarts at each boundary. *(Status: Implemented)*
 16. **In-plugin snapshots (A/B…) (future)**: Two or more setting slots inside the plugin, switchable instantly while playing with one click or one automatable parameter (e.g. A = calm, B = wild, flip for the last bar of a phrase). Complements Logic's own preset menu and Compare button, which manage saved presets but aren't designed for live switching. Common in synths.
+17. **Legato gate above 100% (future)**: Allow gate lengths beyond the step (Ableton's arpeggiator goes up to 200%), so each note rings into the next for legato or overlapping lines. Needs care when the same pitch repeats: the old note's note-off would arrive after the new note-on and cut it, so overlapping same-pitch notes must be handled (e.g. end the old note just before retriggering).
 
 

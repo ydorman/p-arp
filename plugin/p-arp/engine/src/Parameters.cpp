@@ -65,10 +65,10 @@ std::vector<ParamSpec> buildSpecs()
         { "timing", "Subdiv Change Timing", "Rate", K::Choice, 0, 2, "", timingNames, PARP_ENUM (timing, TimingMode) },
 
         // Gate
-        { "gate", "Gate Length", "Gate", K::Int, 10, 100, "%", none, PARP_INT (gate) },
+        { "gate", "Gate Length", "Gate", K::Int, 1, 100, "%", none, PARP_INT (gate) },
         { "gateActive", "Gate Mod Active", "Gate", K::Bool, 0, 1, "", none, PARP_BOOL (gateActive) },
-        { "gateSpreadDown", "Gate Spread (-) Shorter", "Gate", K::Int, 0, 90, "%", none, PARP_INT (gateSpreadDown) },
-        { "gateSpreadUp", "Gate Spread (+) Longer", "Gate", K::Int, 0, 90, "%", none, PARP_INT (gateSpreadUp) },
+        { "gateSpreadDown", "Gate Spread (-) Shorter", "Gate", K::Int, 0, 99, "%", none, PARP_INT (gateSpreadDown) },
+        { "gateSpreadUp", "Gate Spread (+) Longer", "Gate", K::Int, 0, 99, "%", none, PARP_INT (gateSpreadUp) },
         { "gateSteps", "Gate Steps (per side)", "Gate", K::Int, 1, 8, "", none, PARP_INT (gateSteps) },
 
         // Velocity

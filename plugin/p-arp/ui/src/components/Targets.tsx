@@ -1,5 +1,6 @@
 // One row per modulation target: on/off, its range bar, and target-specific options.
-// A target that's off collapses to just its base value (dimmed).
+// A target whose progression is off collapses to just its base value, which is still in use and
+// stays fully editable (exception: velocity, which then follows the played notes).
 
 import type { ReactNode } from "react";
 import { useParam } from "../params/store";
@@ -91,7 +92,7 @@ export function OctaveRow() {
   // Range: cells are the octave span 1..4. Transpose: cells are shifts -3..+3 around the span.
   const cells = transpose
     ? [-3, -2, -1, 0, 1, 2, 3].map((o) => ({ content: o === 0 ? "0" : o > 0 ? `+${o}` : `${o}`, title: `shift ${o} octave(s)` }))
-    : [1, 2, 3, 4].map((o) => ({ content: `${o}`, title: `${o} octave(s)` }));
+    : [1, 2, 3, 4].map((o) => ({ content: `${o}`, title: `the pattern spans ${o} octave(s)` }));
   const baseCell = transpose ? 3 : base.value - 1;
 
   return (
@@ -100,7 +101,7 @@ export function OctaveRow() {
       activeParam="octaveActive"
       extras={
         <>
-          {transpose && <Stepper param="baseOctave" label="span" />}
+          {transpose && <Stepper param="baseOctave" label="octaves" />}
           <Select param="octaveMode" labels={["Range", "Transpose"]} title="Range: each step adds an octave to the cycle. Transpose: shifts the whole cycle." />
         </>
       }
@@ -151,6 +152,17 @@ function ScaledRow({ label, id, format }: { label: string; id: "gate" | "velocit
   const active = useParam(`${id}Active`);
   const down = useParam(`${id}SpreadDown`);
   const up = useParam(`${id}SpreadUp`);
+  const steps = useParam(`${id}Steps`).value;
+  if (id === "velocity" && !active.value) {
+    // Velocity progression off: notes keep the velocity they were played with
+    return (
+      <TargetRow label={label} activeParam={`${id}Active`}>
+        <div className="as-played" title="Turn on to set a base velocity and a progression">
+          <strong>as played</strong> · notes keep the velocity they were played with
+        </div>
+      </TargetRow>
+    );
+  }
   return (
     <TargetRow label={label} activeParam={`${id}Active`} extras={active.value ? <Stepper param={`${id}Steps`} label="steps ±" /> : null}>
       <TrackRange
@@ -161,7 +173,7 @@ function ScaledRow({ label, id, format }: { label: string; id: "gate" | "velocit
         up={up.value}
         maxSpreadDown={down.spec.max}
         maxSpreadUp={up.spec.max}
-        steps={useParam(`${id}Steps`).value}
+        steps={steps}
         active={active.value !== 0}
         format={format}
         onBase={base.set}

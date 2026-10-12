@@ -1056,3 +1056,21 @@ TEST_CASE ("bursts: a chord exactly on a grid line at a fast rate plays its firs
     CHECK_EQ (beatsOf (host.noteOns()), (Beats { 2, 2.03125, 2.0625, 2.09375 }));
     CHECK_EQ (pitchesOf (host.noteOns()), (Vec { 55, 62, 55, 62 }));
 }
+
+TEST_CASE ("latch: stopping the transport clears the latched chord")
+{
+    // A latched chord used to survive a stop, so the next start played it again with no keys held
+    HostSim host (plainWith ([] (Settings& s) { s.latch = true; }));
+    host.noteOn (60);
+    host.play (0.1);
+    host.noteOff (60);
+    host.play (1);
+    CHECK (! host.noteOns().empty()); // latched: keeps playing after release
+    host.stop();
+    host.events.clear();
+    host.play (1);
+    CHECK_EQ (host.noteOns().size(), size_t (0)); // restart: nothing latched any more
+    host.noteOn (64);                             // a new chord latches as usual
+    host.play (1);
+    CHECK (! host.noteOns().empty());
+}

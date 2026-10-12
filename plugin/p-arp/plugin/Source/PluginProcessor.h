@@ -3,15 +3,12 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <parp/Engine.h>
 #include <parp/Parameters.h>
+#include "DebugLog.h"
 #include <atomic>
 #include <vector>
 
-// Parameter IDs used directly by the plugin layer. All parameters are defined once in the engine's
-// parameter table (parp::parameterSpecs); IDs are saved in projects and automation: never rename.
-namespace ParamID
-{
-    inline constexpr const char* globalRange = "globalRange";
-}
+// All parameters are defined once in the engine's parameter table (parp::parameterSpecs); IDs are
+// saved in projects and automation: never rename one.
 
 // p-arp AU MIDI FX. Adapts the host (MIDI buffer, play head, parameters) to parp::Engine and
 // publishes engine status for the UI. All real logic lives in the engine.
@@ -54,6 +51,9 @@ public:
         std::atomic<double> bpm { 0.0 };
         std::atomic<double> ppq { 0.0 };
     } uiStatus;
+
+    // Saved with the project (not a host parameter)
+    DebugLog debugLog;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

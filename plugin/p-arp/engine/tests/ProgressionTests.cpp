@@ -288,14 +288,15 @@ TEST_CASE ("gate: spreads 4 steps on each side of the base")
               (Vec { 40, 50, 60, 70, 80, 85, 90, 95, 100 }));
 }
 
-TEST_CASE ("gate: clamps to 10..100")
+TEST_CASE ("gate: clamps to 1..100")
 {
+    // The prototype's range was 10..100; the plugin allows very short (1%) notes
     Settings s;
     s.gate = 20;
     s.gateActive = true;
     s.gateSpreadDown = 40;
     s.gateSpreadUp = 90;
-    CHECK_EQ (seriesValueAt (SeriesId::Gate, -4, s), 10);
+    CHECK_EQ (seriesValueAt (SeriesId::Gate, -4, s), 1);
     CHECK_EQ (seriesValueAt (SeriesId::Gate, 4, s), 100);
 }
 

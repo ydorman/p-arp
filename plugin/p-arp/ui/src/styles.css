@@ -75,6 +75,27 @@ select {
   color: var(--muted);
 }
 
+.debug-log {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.debug-log-file {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.debug-log-file:hover {
+  text-decoration: underline;
+}
+
 .panel {
   background: var(--panel);
   border-radius: 10px;
@@ -453,10 +474,6 @@ select {
   font-weight: 700;
 }
 
-.cells.off .cell.base {
-  background: var(--line);
-  color: var(--text);
-}
 
 .handle {
   position: absolute;
@@ -557,9 +574,6 @@ select {
   cursor: grab;
 }
 
-.track-range.off .track-base {
-  background: var(--muted);
-}
 
 .track-values {
   display: flex;
@@ -578,7 +592,15 @@ select {
   justify-content: center;
 }
 
-.cells.off,
-.track-range.off {
-  opacity: 0.6;
+/* Progression off: the base is still the value in use, so it stays fully active; only the range
+   (highlight, handles, ticks) is hidden */
+
+.as-played {
+  color: var(--muted);
+  padding: 0 6px;
+}
+
+.as-played strong {
+  color: var(--text);
+  font-weight: 600;
 }

@@ -55,6 +55,7 @@ public:
     NoteOnResult noteOn (int pitch, int velocity, bool latch);
     NoteOffResult noteOff (int pitch, bool latch);
     void clear();
+    void clearLatched() { latchedNotes.clear(); }
 
     // Notes the arp plays: the latched chord when latch is on and one exists, else the held keys
     std::span<const Note> active (bool latch) const;

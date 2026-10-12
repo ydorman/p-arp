@@ -19,6 +19,19 @@ submenus) and copies their values into the engine's `Settings` once per block. I
 projects and automation: never change or reuse one (names can change). Adding a setting: add the
 `Settings` field and its table row.
 
+**Debug log**: the **Debug log** switch in the plugin's header (saved with the project, not a
+host parameter) writes the same `[SARP]` lines as the Scripter prototype's Debug Log to
+`~/Library/Logs/p-arp/debug-<date>_<time>.log` (a new file each time it's switched on; click the
+file name to show it in Finder). Turn it on *before* starting the transport, then replay the file
+in the prototype's mock to compare the plugin's notes with the prototype's:
+
+```bash
+node tests/replay.js ~/Library/Logs/p-arp/debug-<date>_<time>.log
+```
+
+The engine records events into a lock-free buffer on the audio thread; a message-thread timer
+formats and writes them (4 times a second). Formatting is in the engine (`EventLog`), with tests.
+
 ## Prerequisites
 
 Xcode, CMake (`brew install cmake`), Node. All commands use

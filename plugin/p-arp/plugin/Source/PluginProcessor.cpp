@@ -146,6 +146,7 @@ void ParpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
         }
     }
 
+    engine.setLog (debugLog.engineLog());
     engine.setSettings (readSettings());
 
     engine.process (transport, buffer.getNumSamples(), engineIn, engineOut);
@@ -175,9 +176,16 @@ juce::AudioProcessorEditor* ParpProcessor::createEditor()
     return new ParpEditor (*this);
 }
 
+namespace
+{
+const juce::Identifier debugLogProperty { "debugLog" };
+}
+
 void ParpProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = state.copyState().createXml())
+    auto tree = state.copyState();
+    tree.setProperty (debugLogProperty, debugLog.isEnabled(), nullptr);
+    if (auto xml = tree.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -185,7 +193,12 @@ void ParpProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (state.state.getType()))
-            state.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto tree = juce::ValueTree::fromXml (*xml);
+            debugLog.setEnabled (tree.getProperty (debugLogProperty, false));
+            tree.removeProperty (debugLogProperty, nullptr);
+            state.replaceState (tree);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

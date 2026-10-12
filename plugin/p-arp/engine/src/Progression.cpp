@@ -145,7 +145,7 @@ Limits limits (SeriesId id, const Settings& s)
                 return { s.baseOctave - 3, s.baseOctave + 3 };
             return { 1, 4 };
         case SeriesId::Rate:     return { 0, rateMaxPower }; // power within the base rate's family
-        case SeriesId::Gate:     return { 10, 100 };
+        case SeriesId::Gate:     return { 1, 100 };
         case SeriesId::Velocity: return { 1, 127 };
         case SeriesId::Swing:    return { 50, 75 };
     }

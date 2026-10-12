@@ -45,6 +45,7 @@ juce_add_binary_data(ParpUI SOURCES "${PARP_UI_ZIP}")
 
 target_sources(ParpPlugin
     PRIVATE
+        Source/DebugLog.cpp
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp)
 

@@ -4,6 +4,7 @@ import { PatternIcon } from "./components/icons";
 import { PATTERN_NAMES } from "./params/spec";
 import { GateRow, HumanizeRow, OctaveRow, PatternRow, RateRow, SwingRow, VelocityRow } from "./components/Targets";
 import { useEngineStatus } from "./hooks/useEngineStatus";
+import * as Juce from "./juce/index.js";
 import { useParam } from "./params/store";
 
 const SHAPES = [
@@ -67,12 +68,45 @@ function LiveView() {
   );
 }
 
+function nativeFunction(name: string) {
+  const functions = window.__JUCE__.initialisationData.__juce__functions;
+  return Array.isArray(functions) && functions.includes(name) ? Juce.getNativeFunction(name) : null;
+}
+const setDebugLog = nativeFunction("setDebugLog");
+const revealDebugLog = nativeFunction("revealDebugLog");
+
+// Debug log switch (plugin state, not a host parameter): writes a replayable [SARP] log to
+// ~/Library/Logs/p-arp. Turn it on before starting the transport (the log needs the START line).
+function DebugLogSwitch() {
+  const status = useEngineStatus();
+  if (!setDebugLog) return null;
+  const file = status.debugLogFile.split("/").pop();
+  return (
+    <div className="debug-log">
+      <button
+        className={`toggle ${status.debugLog ? "on" : ""}`}
+        role="switch"
+        aria-checked={status.debugLog}
+        onClick={() => setDebugLog(!status.debugLog)}
+        title="Write a debug log (turn on before starting the transport; replay with tests/replay.js)"
+      >
+        <span className="toggle-dot" />
+        <span className="toggle-label">Debug log</span>
+      </button>
+      <button className="debug-log-file" onClick={() => revealDebugLog?.()} title="Show in Finder">
+        {file || "~/Library/Logs/p-arp"}
+      </button>
+    </div>
+  );
+}
+
 export function App() {
   return (
     <div className="app">
       <header className="header">
         <span className="logo">p-arp</span>
         <span className="tag">progressive arpeggiator</span>
+        <DebugLogSwitch />
       </header>
 
       <section className="panel performance">

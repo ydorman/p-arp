@@ -55,11 +55,17 @@ function paramValue(def, text) {
   return parseFloat(text);
 }
 
+// p-arp plugin logs name parameters without the "%" unit: "Gate Length" for "Gate Length (%)",
+// "Humanize Gate (+/-)" for "Humanize Gate (+/- %)"
+function withoutUnit(name) {
+  return name.replace(/ \(%\)$/, "").replace(" %)", ")");
+}
+
 function parseSetting(defs, assignment) {
   const eq = assignment.lastIndexOf(" = ");
   const name = assignment.slice(0, eq).trim();
   const text = assignment.slice(eq + 3).replace(/\s*@.*$/, "").trim();
-  const index = defs.findIndex((d) => d.name === name);
+  const index = defs.findIndex((d) => d.name === name || withoutUnit(d.name) === name);
   if (index < 0) throw new Error(`Unknown parameter "${name}"`);
   return { index, value: paramValue(defs[index], text) };
 }

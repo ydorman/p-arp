@@ -3,8 +3,10 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
 
-// Hosts the React UI in a web view. Controls bind to parameters through JUCE relays; engine
-// status is pushed to the page as "engineStatus" events.
+// Hosts the React UI in a web view. Every parameter in the engine's table gets a JUCE relay (named
+// by the parameter id) and an attachment binding it to the host parameter, so UI controls read and
+// write the real parameters (incl. automation gestures). Engine status is pushed to the page as
+// "engineStatus" events.
 //
 // Release builds serve the UI from the zip embedded in the binary. Builds configured with
 // PARP_UI_DEV_SERVER=ON load it from the Vite dev server instead (hot reload inside Logic).
@@ -21,18 +23,26 @@ private:
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     static juce::WebBrowserComponent::Options createBrowserOptions (ParpEditor& editor);
 
+    // One relay per parameter, by kind (Int -> slider, Bool -> toggle, Choice -> combo box)
+    struct Relays
+    {
+        std::vector<std::unique_ptr<juce::WebSliderRelay>> sliders;
+        std::vector<std::unique_ptr<juce::WebToggleButtonRelay>> toggles;
+        std::vector<std::unique_ptr<juce::WebComboBoxRelay>> comboBoxes;
+    };
+    static Relays createRelays();
+
     ParpProcessor& parpProcessor;
     juce::ZipFile uiZip;
 
     // Declaration order matters: relays before the browser (its options reference them),
-    // attachments after both.
-    juce::WebSliderRelay globalRangeRelay { ParamID::globalRange };
-
+    // attachments (created in the constructor) after both.
+    Relays relays = createRelays();
     juce::WebBrowserComponent browser { createBrowserOptions (*this) };
 
-    juce::WebSliderParameterAttachment globalRangeAttachment {
-        *parpProcessor.state.getParameter (ParamID::globalRange), globalRangeRelay, nullptr
-    };
+    std::vector<std::unique_ptr<juce::WebSliderParameterAttachment>> sliderAttachments;
+    std::vector<std::unique_ptr<juce::WebToggleButtonParameterAttachment>> toggleAttachments;
+    std::vector<std::unique_ptr<juce::WebComboBoxParameterAttachment>> comboBoxAttachments;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ParpEditor)
 };

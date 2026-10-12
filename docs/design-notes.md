@@ -116,6 +116,10 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   (1000 x 640) and never reflows or wraps; resizing the plugin window (aspect ratio locked,
   75%-150%) scales the whole panel. Chosen over web-style reflow (positions moving around) and
   scrollbars; matches Logic's own plugins (Decapitator-style non-resizable is the simpler variant).
+- **UI open items (after engine integration):** visual design pass (fonts, sizes, colors); window
+  resizing doesn't work in Logic yet (stage scales in a browser; the editor's resizable/aspect
+  setup needs debugging); curve step editor; live view; Octave Transpose base/span presentation;
+  empty space at the bottom of the panel.
 - **GUI ideas to tame ~47 controls:** one panel per target with a single on/off; Global Range,
   Link Series and Series Curve as the main "performance" controls; Custom Series as a visual step
   editor; series visualizer with playhead; debug/humanize in an advanced panel.
@@ -162,6 +166,20 @@ beat, so grid positions are whole samples). Differences from the prototype, all 
   line *after* it. At rates faster than the 1/16-beat chord tolerance (1/64, 1/128) a chord
   exactly on a grid line otherwise played two notes at the same instant. The Scripter prototype
   has the same latent flaw (rarely triggered there because its chords arrived off-grid).
+
+- **Transport stop releases a latched chord** (the prototype keeps it): each play starts fresh,
+  and a region's notes latch again when it plays. Reported as a bug in Logic (a stopped,
+  restarted transport kept playing the old latched note).
+
+**Debug log**: same line format as the prototype's `[SARP]` log, so `tests/replay.js` replays
+plugin logs in the prototype mock (the plugin drops the "%" unit from three parameter names;
+replay accepts both). The engine pushes POD records (`EventLog`) into a lock-free SPSC ring
+buffer (8192 records, dropped and counted when full, never blocks); a message-thread timer in
+the processor drains, formats and appends them to `~/Library/Logs/p-arp/`. Parameter changes are
+logged once per block as PARAM lines (diff against the last logged settings), at the block start.
+On/off is saved in the plugin state, not a host parameter (it shouldn't be automatable or show
+in Logic's parameter list). Known gap vs. the prototype: the log only has a START line (needed by
+replay) when it was on before the transport started.
 
 Environment notes: Xcode is installed at `/Applications/Xcode.app` but `xcode-select` points at the
 Command Line Tools - build with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` rather

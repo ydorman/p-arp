@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <vector>
+#include "parp/EventLog.h"
 #include "parp/FixedVector.h"
 #include "parp/Progression.h"
 #include "parp/Random.h"
@@ -80,6 +81,10 @@ public:
                   std::span<const MidiEvent> in, std::vector<MidiEvent>& out);
 
     EngineStatus status() const { return currentStatus; }
+
+    // Debug log: records events into `log` (nullptr = off). Call from the audio thread (or before
+    // processing starts); the log must outlive its use here.
+    void setLog (EventLog* log) { eventLog = log; }
     Random& random() { return rng; }
 
     // Capacity callers should reserve for `out` (max events one block can produce)
@@ -124,6 +129,9 @@ private:
     void alignSchedule (double beat, double gridLength, double stepDuration);
     double advanceUnitBeats() const;
 
+    void logEvent (LogRecord record);
+    void logSettingChanges (double beat);
+
     static void emit (std::vector<MidiEvent>& out, MidiEvent::Type type, int offset, int pitch, int velocity, int channel = 1);
     static int toOffset (const Block& block, double beat);
 
@@ -148,6 +156,8 @@ private:
     double lastLateOnset = -1.0; // a note played late (immediately); the next must be after it
 
     EngineStatus currentStatus;
+    EventLog* eventLog = nullptr;
+    Settings loggedSettings; // settings as of the last START / PARAM lines
 };
 
 // Quantize a beat to the grid of a step length (grid lines at beat 1 + k * step). On the grid

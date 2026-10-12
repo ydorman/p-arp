@@ -37,7 +37,7 @@ struct Settings
     int patternSpreadDown = 1, patternSpreadUp = 1; // 0..5
 
     // Octave series
-    int baseOctave = 2; // 1..4
+    int baseOctave = 1; // 1..4 (Scripter defaulted to 2; one octave is the usual arp default)
     bool octaveActive = false;
     int octaveSpreadDown = 1, octaveSpreadUp = 1; // 0..3
     OctaveMode octaveMode = OctaveMode::Range;
@@ -49,9 +49,9 @@ struct Settings
     TimingMode timing = TimingMode::SnapToGrid;
 
     // Gate series (%)
-    int gate = 80; // 10..100
+    int gate = 80; // 1..100
     bool gateActive = false;
-    int gateSpreadDown = 40, gateSpreadUp = 20; // 0..90
+    int gateSpreadDown = 40, gateSpreadUp = 20; // 0..99
     int gateSteps = 4;                          // 1..8 per side
 
     // Velocity series

@@ -6,9 +6,11 @@ export interface EngineStatus {
   playing: boolean;
   bpm: number;
   ppq: number;
+  debugLog: boolean;
+  debugLogFile: string; // empty until something was logged
 }
 
-const initialStatus: EngineStatus = { noteOnsIn: 0, noteOnsOut: 0, playing: false, bpm: 0, ppq: 0 };
+const initialStatus: EngineStatus = { noteOnsIn: 0, noteOnsOut: 0, playing: false, bpm: 0, ppq: 0, debugLog: false, debugLogFile: "" };
 
 /**
  * Engine status pushed from C++ ("engineStatus" events, ~30/s).

@@ -75,6 +75,8 @@ pbpaste | node tests/replay.js
 
 The replay re-creates the settings and input notes in the test mock and compares the generated notes with Logic's, reporting the first difference. A difference means either a bug in the mock's assumptions about Logic or timing that depends on Logic's audio blocks.
 
+The p-arp plugin writes the same log format to a file (see `plugin/p-arp/README.md`), so `node tests/replay.js <file>` also compares the plugin's notes with the prototype's.
+
 ## Tests
 Scripter has no test framework, so `tests/scripter_mock.js` fakes the parts of the Scripter API the scripts use (`NoteOn`/`NoteOff`, `GetParameter`, `GetTimingInfo`, `Trace`) and loads the script file unmodified in Node. Tests can call the script's functions directly or simulate host playback (blocks of `ProcessMIDI`, cycle wraps, transport stop) and inspect the MIDI it sends.
 

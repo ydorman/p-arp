@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include "parp/Parameters.h"
 
 namespace parp
 {
@@ -90,6 +91,34 @@ int Engine::toOffset (const Block& block, double beat)
     return std::clamp (offset, 0, std::max (0, block.numSamples - 1));
 }
 
+void Engine::logEvent (LogRecord record)
+{
+    if (eventLog == nullptr)
+        return;
+    record.beatsPerBar = beatsPerBar;
+    eventLog->push (record);
+}
+
+void Engine::logSettingChanges (double beat)
+{
+    if (eventLog == nullptr || loggedSettings == currentSettings)
+        return;
+    const auto specs = parameterSpecs();
+    for (std::size_t i = 0; i < specs.size(); ++i)
+    {
+        const int value = specs[i].get (currentSettings);
+        if (value == specs[i].get (loggedSettings))
+            continue;
+        LogRecord record;
+        record.type = LogType::Param;
+        record.param = std::int16_t (i);
+        record.value = value;
+        record.beat = beat;
+        logEvent (record);
+    }
+    loggedSettings = currentSettings;
+}
+
 void Engine::rebuildSequence()
 {
     buildSequence (chords.active (currentSettings.latch), currentSettings, progression, sequence);
@@ -156,7 +185,13 @@ void Engine::stopAllSoundingNotes (int offset, std::vector<MidiEvent>& out)
         for (std::size_t j = 0; j < i; ++j)
             alreadySent = alreadySent || pendingOffs[j].pitch == pendingOffs[i].pitch;
         if (! alreadySent)
+        {
             emit (out, MidiEvent::Type::NoteOff, offset, pendingOffs[i].pitch, 64, pendingOffs[i].channel);
+            LogRecord record;
+            record.type = LogType::Flush;
+            record.pitch = std::int16_t (pendingOffs[i].pitch);
+            logEvent (record);
+        }
     }
     pendingOffs.clear();
 }
@@ -173,6 +208,7 @@ void Engine::handleNoteOn (int pitch, int velocity, double beat, int offset, std
         stopAllSoundingNotes (offset, out);
     if (result.newChord)
     {
+        logEvent ({ .type = LogType::NewChord });
         // A new chord restarts the series and the pattern, snapped to the grid of its starting rate
         progression.reset (currentSettings);
         hasAdvanceBoundary = false;
@@ -211,9 +247,18 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
 
     const auto beatAt = [&block] (int offset) { return block.start + double (offset) / block.samplesPerBeat; };
     const auto applyInput = [&] (const MidiEvent& event) {
-        if (event.type == MidiEvent::Type::NoteOn && event.velocity > 0)
-            handleNoteOn (event.note, event.velocity, beatAt (event.sampleOffset), event.sampleOffset, out);
-        else if (event.type == MidiEvent::Type::NoteOn || event.type == MidiEvent::Type::NoteOff)
+        const bool isOn = event.type == MidiEvent::Type::NoteOn && event.velocity > 0;
+        if (! isOn && event.type != MidiEvent::Type::NoteOn && event.type != MidiEvent::Type::NoteOff)
+            return;
+        LogRecord record;
+        record.type = isOn ? LogType::NoteIn : LogType::NoteInOff;
+        record.pitch = std::int16_t (event.note);
+        record.velocity = std::int16_t (event.velocity);
+        record.beat = beatAt (event.sampleOffset);
+        logEvent (record);
+        if (isOn)
+            handleNoteOn (event.note, event.velocity, record.beat, event.sampleOffset, out);
+        else
             handleNoteOff (event.note, event.sampleOffset, out);
     };
     const std::size_t firstOut = out.size();
@@ -223,17 +268,41 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
     {
         wasPlaying = true;
         lastBlockStartBeat = block.start;
+        if (eventLog != nullptr)
+        {
+            LogRecord start;
+            start.type = LogType::Start;
+            start.beat = block.start;
+            start.value1 = transport.bpm;
+            start.flag = block.cycling;
+            start.value2 = block.leftCycleBeat;
+            start.value3 = block.rightCycleBeat;
+            logEvent (start);
+            const auto specs = parameterSpecs();
+            for (std::size_t i = 0; i < specs.size(); ++i)
+                logEvent ({ .type = LogType::Set, .param = std::int16_t (i), .value = specs[i].get (currentSettings) });
+            loggedSettings = currentSettings;
+        }
         restartAtTransportStart (block.start);
+        logEvent ({ .type = LogType::AlignStart, .rate = std::int16_t (progression.value (SeriesId::Rate, currentSettings)), .beat = nextBeat });
+    }
+    else if (transport.playing)
+    {
+        logSettingChanges (block.start);
     }
 
-    // 2. Transport stop: stop sounding notes; incoming notes are still tracked
+    // 2. Transport stop: stop sounding notes and release a latched chord (each play starts fresh;
+    // a region's notes latch again when it plays). Incoming notes are still tracked.
     if (! transport.playing)
     {
         if (wasPlaying)
         {
             wasPlaying = false;
             lastBlockStartBeat = -1.0;
+            logEvent ({ .type = LogType::Stop, .beat = block.start });
             stopAllSoundingNotes (0, out);
+            chords.clearLatched();
+            rebuildSequence();
         }
         for (const auto& event : in)
             applyInput (event);
@@ -250,6 +319,7 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
         if (block.cycling && block.start >= block.leftCycleBeat && block.start - block.leftCycleBeat < chordLateTolerance)
             wrapFrom = block.leftCycleBeat;
         restartAtTransportStart (wrapFrom);
+        logEvent ({ .type = LogType::LoopWrap, .rate = std::int16_t (progression.value (SeriesId::Rate, currentSettings)), .beat = nextBeat });
     }
     lastBlockStartBeat = block.start;
 
@@ -264,6 +334,7 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
         {
             alignSchedule (block.start, rate.grid, rate.beats);
             pendingRealign = Realign::None;
+            logEvent ({ .type = LogType::CatchUp, .beat = nextBeat });
         }
     }
 
@@ -326,11 +397,20 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
         if (pendingRealign != Realign::None || snapToGrid)
         {
             const double gridLength = pendingRealign == Realign::Beat ? std::max (1.0, rate.grid) : rate.grid;
+            const double beforeAlign = nextBeat;
             alignSchedule (nextBeat, gridLength, stepBeats);
             // After a late (immediately played) note, resync to a grid line after it, never onto it
             if (lastLateOnset >= 0.0 && nextBeat <= lastLateOnset + beatEpsilon)
                 alignSchedule (lastLateOnset + gridLength * 0.5, gridLength, stepBeats);
             lastLateOnset = -1.0;
+            if (pendingRealign != Realign::None || nextBeat - beforeAlign > 1e-6)
+            {
+                const char reason = pendingRealign == Realign::Chord ? 'c'
+                                  : pendingRealign == Realign::Rate  ? 'r'
+                                  : pendingRealign == Realign::Beat  ? 'b'
+                                                                     : 's';
+                logEvent ({ .type = LogType::Align, .reason = reason, .beat = nextBeat, .value1 = beforeAlign, .value2 = gridLength });
+            }
             pendingRealign = Realign::None;
             if (nextBeat >= segmentEnd - beatEpsilon)
                 break;
@@ -351,8 +431,11 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
             {
                 lastAdvanceBoundary = boundary;
                 const auto completed = progression.advance (s, true);
+                if (completed.contains (SeriesId::Rate))
+                    logEvent ({ .type = LogType::Pass, .flag = s.timing == TimingMode::Flow });
                 stepIndex = 0;
                 rebuildSequence();
+                logEvent ({ .type = LogType::Advance, .beat = nextBeat, .value1 = unitBeats });
                 if (completed.contains (SeriesId::Rate) && s.timing == TimingMode::Flow)
                     pendingRealign = Realign::Beat;
                 continue;
@@ -399,6 +482,23 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
             pendingOffs.push_back ({ noteOffBeat, note.pitch, 1 });
             ++currentStatus.noteOnsOut;
         }
+        if (eventLog != nullptr)
+        {
+            LogRecord record;
+            record.type = playNote ? LogType::Out : LogType::Skip;
+            record.pitch = note.pitch;
+            record.velocity = std::int16_t (finalVelocity);
+            record.beat = noteOnBeat;
+            record.value1 = noteOffBeat - noteOnBeat;
+            record.rate = std::int16_t (progression.value (SeriesId::Rate, s));
+            record.octave = std::int16_t (progression.value (SeriesId::Octave, s));
+            record.pattern = std::int16_t (pattern);
+            record.gate = std::int16_t (jsRound (gate * 100.0));
+            record.swing = std::int16_t (progression.value (SeriesId::Swing, s));
+            record.step = std::int16_t (stepIndex + 1);
+            record.stepCount = std::int16_t (sequence.size());
+            logEvent (record);
+        }
 
         // G. Advance the step
         bool isCycleEnd = false;
@@ -416,6 +516,7 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
         // jump forward and snap to the grid instead of firing every missed step at once
         if (nextBeat < segmentStart)
         {
+            logEvent ({ .type = LogType::Behind, .beat = segmentStart, .value1 = nextBeat });
             nextBeat = segmentStart;
             pendingRealign = Realign::Rate;
             lastLateOnset = noteOnBeat;
@@ -425,6 +526,8 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
         if (s.advanceTrigger == AdvanceTrigger::NoteStep || (s.advanceTrigger == AdvanceTrigger::ArpCycle && isCycleEnd))
         {
             const auto completed = progression.advance (s, isCycleEnd);
+            if (completed.contains (SeriesId::Rate))
+                logEvent ({ .type = LogType::Pass, .flag = s.timing == TimingMode::Flow });
             if (completed.contains (SeriesId::Rate) && s.timing == TimingMode::Flow)
                 pendingRealign = Realign::Beat;
             rebuildSequence();
