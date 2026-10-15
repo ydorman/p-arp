@@ -15,7 +15,7 @@ const initialStatus: EngineStatus = { noteOnsIn: 0, noteOnsOut: 0, playing: fals
 /**
  * Engine status pushed from C++ ("engineStatus" events, ~30/s).
  *
- * Fine for low-rate readouts. For high-frequency visuals (playhead, live series positions) don't
+ * Fine for low-rate readouts. For high-frequency visuals (playhead, live notes) don't
  * route every update through React state: subscribe directly and draw in a canvas / update refs
  * on requestAnimationFrame.
  */

@@ -51,6 +51,7 @@ void Engine::reset()
     hasAdvanceBoundary = false;
     lastLateOnset = -1.0;
     currentStatus = {};
+    timelineAtBlockStart = 0.0;
 }
 
 void Engine::setSettings (const Settings& newSettings)
@@ -262,6 +263,9 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
             handleNoteOff (event.note, event.sampleOffset, out);
     };
     const std::size_t firstOut = out.size();
+    timelineAtBlockStart = currentStatus.timeline;
+    if (transport.playing)
+        currentStatus.timeline += block.end - block.start;
 
     // 1. Transport start
     if (transport.playing && ! wasPlaying)
@@ -481,6 +485,16 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
             emit (out, MidiEvent::Type::NoteOn, toOffset (block, noteOnBeat), note.pitch, finalVelocity);
             pendingOffs.push_back ({ noteOffBeat, note.pitch, 1 });
             ++currentStatus.noteOnsOut;
+        }
+        if (liveNotes != nullptr && playNote)
+        {
+            LiveNote live;
+            live.time = timelineAtBlockStart + (noteOnBeat - block.start);
+            live.beat = noteOnBeat;
+            live.length = noteOffBeat - noteOnBeat;
+            live.pitch = note.pitch;
+            live.velocity = std::uint8_t (finalVelocity);
+            liveNotes->push (live);
         }
         if (eventLog != nullptr)
         {

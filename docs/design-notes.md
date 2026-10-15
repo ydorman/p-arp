@@ -118,8 +118,19 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   scrollbars; matches Logic's own plugins (Decapitator-style non-resizable is the simpler variant).
 - **UI open items (after engine integration):** visual design pass (fonts, sizes, colors); window
   resizing doesn't work in Logic yet (stage scales in a browser; the editor's resizable/aspect
-  setup needs debugging); curve step editor; live view; Octave Transpose base/span presentation;
-  empty space at the bottom of the panel.
+  setup needs debugging); curve step editor; Octave Transpose base/span presentation.
+- **Live view:** a piano roll of the generated notes over the last 2 bars, playhead at 86% so
+  sounding notes' tails show. Rate, octave, pattern and gate read directly from the notes'
+  placement and length; velocity is the note color (Logic's piano roll scale, purple at 0 to red
+  at 127, with a scale on the right). A first version also had one lane per active series under
+  the roll; dropped after trying it in Logic: the roll already shows them, the lanes were clutter.
+  Pitch range fits the notes in view (grows at once, shrinks slowly, at least an octave); a
+  4-octave phrase still reads as a contour at ~3px per semitone. Freezes on the last notes when
+  the transport stops. Data: the engine pushes a `LiveNote` per note-on into an SPSC ring, only
+  while an editor is open; the editor forwards batches ("liveNotes") at 30 Hz. Time axis = the
+  engine's `timeline` (beats played, never jumps back on loop wraps), so the roll scrolls
+  continuously through cycles. Canvas drawn each animation frame, playhead extrapolated between
+  status updates. A demo feed runs in a plain browser.
 - **GUI ideas to tame ~47 controls:** one panel per target with a single on/off; Global Range,
   Link Series and Series Curve as the main "performance" controls; Custom Series as a visual step
   editor; series visualizer with playhead; debug/humanize in an advanced panel.

@@ -106,11 +106,17 @@ ParpEditor::ParpEditor (ParpProcessor& p)
         constrainer->setSizeLimits (750, 480, 1500, 960);
     }
     setSize (1000, 640);
+
+    // Live view feed: drop notes left from an earlier editor, then let the engine push new ones
+    parp::LiveNote stale;
+    while (parpProcessor.liveNotes.pop (stale)) {}
+    parpProcessor.liveNotesEnabled = true;
     startTimerHz (30);
 }
 
 ParpEditor::~ParpEditor()
 {
+    parpProcessor.liveNotesEnabled = false;
     stopTimer();
 }
 
@@ -127,9 +133,31 @@ void ParpEditor::timerCallback()
     status->setProperty ("playing", parpProcessor.uiStatus.playing.load());
     status->setProperty ("bpm", parpProcessor.uiStatus.bpm.load());
     status->setProperty ("ppq", parpProcessor.uiStatus.ppq.load());
+    status->setProperty ("timeline", parpProcessor.uiStatus.timeline.load());
+    status->setProperty ("beatsPerBar", parpProcessor.uiStatus.beatsPerBar.load());
     status->setProperty ("debugLog", parpProcessor.debugLog.isEnabled());
     status->setProperty ("debugLogFile", parpProcessor.debugLog.currentFile().getFullPathName());
     browser.emitEventIfBrowserIsVisible ("engineStatus", juce::var (status));
+    sendLiveNotes();
+}
+
+// Generated notes since the last tick: { time, beat, length, pitch, velocity }
+void ParpEditor::sendLiveNotes()
+{
+    juce::Array<juce::var> notes;
+    parp::LiveNote note;
+    while (parpProcessor.liveNotes.pop (note))
+    {
+        auto* item = new juce::DynamicObject();
+        item->setProperty ("time", note.time);
+        item->setProperty ("beat", note.beat);
+        item->setProperty ("length", note.length);
+        item->setProperty ("pitch", (int) note.pitch);
+        item->setProperty ("velocity", (int) note.velocity);
+        notes.add (juce::var (item));
+    }
+    if (! notes.isEmpty())
+        browser.emitEventIfBrowserIsVisible ("liveNotes", notes);
 }
 
 // Serve files from the embedded UI zip ("/" -> index.html)

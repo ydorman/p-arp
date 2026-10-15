@@ -9,6 +9,7 @@
 #include "parp/Random.h"
 #include "parp/Sequence.h"
 #include "parp/Settings.h"
+#include "parp/SpscRing.h"
 
 namespace parp
 {
@@ -46,7 +47,22 @@ struct EngineStatus
 {
     int noteOnsIn = 0;
     int noteOnsOut = 0;
+    // Beats played since the engine was prepared: advances while the transport plays, never
+    // jumps back (loop wraps, relocation), stands still while stopped. The live view's time axis.
+    double timeline = 0.0;
 };
+
+// A generated note for the live view
+struct LiveNote
+{
+    double time = 0.0;   // on the status timeline (beats)
+    double beat = 0.0;   // Logic beat
+    double length = 0.0; // beats
+    std::uint8_t pitch = 0;
+    std::uint8_t velocity = 0;
+};
+
+using LiveNoteRing = SpscRing<LiveNote, 2048>;
 
 // The arpeggiator: the Scripter prototype's scheduler (ProcessMIDI and the note handlers) on top
 // of the series system (Progression) and sequence building.
@@ -85,6 +101,9 @@ public:
     // Debug log: records events into `log` (nullptr = off). Call from the audio thread (or before
     // processing starts); the log must outlive its use here.
     void setLog (EventLog* log) { eventLog = log; }
+
+    // Live view: every generated note is pushed to `notes` (nullptr = off). Same threading rules.
+    void setLiveNotes (LiveNoteRing* notes) { liveNotes = notes; }
     Random& random() { return rng; }
 
     // Capacity callers should reserve for `out` (max events one block can produce)
@@ -157,6 +176,8 @@ private:
 
     EngineStatus currentStatus;
     EventLog* eventLog = nullptr;
+    LiveNoteRing* liveNotes = nullptr;
+    double timelineAtBlockStart = 0.0;
     Settings loggedSettings; // settings as of the last START / PARAM lines
 };
 

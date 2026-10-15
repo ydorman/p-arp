@@ -19,6 +19,10 @@ submenus) and copies their values into the engine's `Settings` once per block. I
 projects and automation: never change or reuse one (names can change). Adding a setting: add the
 `Settings` field and its table row.
 
+**Live view**: the strip at the top of the window scrolls the last 2 bars of generated notes as a
+piano roll, colored by velocity like Logic's (purple = soft, red = 127). In a plain browser
+(`npm run dev`) it plays a demo feed instead.
+
 **Debug log**: the **Debug log** switch in the plugin's header (saved with the project, not a
 host parameter) writes the same `[SARP]` lines as the Scripter prototype's Debug Log to
 `~/Library/Logs/p-arp/debug-<date>_<time>.log` (a new file each time it's switched on; click the

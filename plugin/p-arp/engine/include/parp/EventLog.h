@@ -1,11 +1,9 @@
 #pragma once
 
-#include <array>
-#include <atomic>
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "parp/SpscRing.h"
 
 namespace parp
 {
@@ -60,45 +58,9 @@ struct LogRecord
     double beatsPerBar = 4.0;  // for bar|beat display
 };
 
-// Single-producer (audio thread) / single-consumer (message thread) ring buffer. push() never
-// blocks or allocates; when full, records are dropped and counted.
-class EventLog
+// Debug log records, pushed by the audio thread and popped by the message thread
+class EventLog : public SpscRing<LogRecord, 8192>
 {
-public:
-    static constexpr std::size_t capacity = 8192;
-
-    bool push (const LogRecord& record)
-    {
-        const auto write = writeIndex.load (std::memory_order_relaxed);
-        const auto next = (write + 1) % capacity;
-        if (next == readIndex.load (std::memory_order_acquire))
-        {
-            dropped.fetch_add (1, std::memory_order_relaxed);
-            return false;
-        }
-        records[write] = record;
-        writeIndex.store (next, std::memory_order_release);
-        return true;
-    }
-
-    bool pop (LogRecord& record)
-    {
-        const auto read = readIndex.load (std::memory_order_relaxed);
-        if (read == writeIndex.load (std::memory_order_acquire))
-            return false;
-        record = records[read];
-        readIndex.store ((read + 1) % capacity, std::memory_order_release);
-        return true;
-    }
-
-    // Records dropped because the buffer was full since the last call
-    int takeDropped() { return dropped.exchange (0, std::memory_order_relaxed); }
-
-private:
-    std::array<LogRecord, capacity> records {};
-    std::atomic<std::size_t> writeIndex { 0 };
-    std::atomic<std::size_t> readIndex { 0 };
-    std::atomic<int> dropped { 0 };
 };
 
 // Formatting (message thread). Lines are the prototype's without the "[SARP] " prefix, e.g.

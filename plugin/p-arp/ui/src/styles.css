@@ -189,20 +189,9 @@ select {
   gap: 6px;
 }
 
-.live-placeholder {
-  height: 92px;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--muted);
-}
-
-.live-placeholder em {
-  color: var(--faint);
+.live-canvas {
+  display: block;
+  border-radius: 6px;
 }
 
 .live-status {

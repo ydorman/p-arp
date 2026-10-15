@@ -147,6 +147,7 @@ void ParpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     }
 
     engine.setLog (debugLog.engineLog());
+    engine.setLiveNotes (liveNotesEnabled.load (std::memory_order_relaxed) ? &liveNotes : nullptr);
     engine.setSettings (readSettings());
 
     engine.process (transport, buffer.getNumSamples(), engineIn, engineOut);
@@ -169,6 +170,8 @@ void ParpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     uiStatus.playing.store (transport.playing, std::memory_order_relaxed);
     uiStatus.bpm.store (transport.bpm, std::memory_order_relaxed);
     uiStatus.ppq.store (transport.ppqAtBlockStart, std::memory_order_relaxed);
+    uiStatus.timeline.store (status.timeline, std::memory_order_relaxed);
+    uiStatus.beatsPerBar.store (transport.timeSigNumerator * 4.0 / std::max (1, transport.timeSigDenominator), std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* ParpProcessor::createEditor()

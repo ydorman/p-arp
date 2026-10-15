@@ -6,7 +6,7 @@
 // Hosts the React UI in a web view. Every parameter in the engine's table gets a JUCE relay (named
 // by the parameter id) and an attachment binding it to the host parameter, so UI controls read and
 // write the real parameters (incl. automation gestures). Engine status is pushed to the page as
-// "engineStatus" events.
+// "engineStatus" events; generated notes are sent as "liveNotes" batches while the editor is open.
 //
 // Release builds serve the UI from the zip embedded in the binary. Builds configured with
 // PARP_UI_DEV_SERVER=ON load it from the Vite dev server instead (hot reload inside Logic).
@@ -20,6 +20,7 @@ public:
 
 private:
     void timerCallback() override;
+    void sendLiveNotes();
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     static juce::WebBrowserComponent::Options createBrowserOptions (ParpEditor& editor);
 

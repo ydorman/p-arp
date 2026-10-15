@@ -4,6 +4,7 @@ import { PatternIcon } from "./components/icons";
 import { PATTERN_NAMES } from "./params/spec";
 import { GateRow, HumanizeRow, OctaveRow, PatternRow, RateRow, SwingRow, VelocityRow } from "./components/Targets";
 import { useEngineStatus } from "./hooks/useEngineStatus";
+import { LiveView } from "./components/LiveView";
 import * as Juce from "./juce/index.js";
 import { useParam } from "./params/store";
 
@@ -44,26 +45,6 @@ function Labeled({ label, children }: { label: string; children: ReactNode }) {
     <div className="labeled">
       <span className="labeled-label">{label}</span>
       {children}
-    </div>
-  );
-}
-
-function LiveView() {
-  const status = useEngineStatus();
-  return (
-    <div className="live-view">
-      <div className="live-placeholder">
-        <span>Live view</span>
-        <em>progression paths and played notes will draw here</em>
-      </div>
-      <div className="live-status">
-        <span>{status.playing ? "▶ playing" : "■ stopped"}</span>
-        <span>{status.bpm > 0 ? `${status.bpm.toFixed(1)} bpm` : "– bpm"}</span>
-        <span>beat {(status.ppq + 1).toFixed(2)}</span>
-        <span>
-          notes {status.noteOnsIn} in / {status.noteOnsOut} out
-        </span>
-      </div>
     </div>
   );
 }

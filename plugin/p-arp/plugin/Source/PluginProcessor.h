@@ -50,7 +50,14 @@ public:
         std::atomic<bool> playing { false };
         std::atomic<double> bpm { 0.0 };
         std::atomic<double> ppq { 0.0 };
+        std::atomic<double> timeline { 0.0 }; // see parp::EngineStatus::timeline
+        std::atomic<double> beatsPerBar { 4.0 };
     } uiStatus;
+
+    // Live view: generated notes, fed only while an editor is open (set by the editor)
+    parp::LiveNoteRing liveNotes;
+    std::atomic<bool> liveNotesEnabled { false };
+
 
     // Saved with the project (not a host parameter)
     DebugLog debugLog;
