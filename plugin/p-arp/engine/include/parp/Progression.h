@@ -69,7 +69,8 @@ double effectiveSpread (SeriesId id, const Settings& s, bool below); // scaled b
 Bounds seriesBounds (SeriesId id, const Settings& s);
 int seriesValueAt (SeriesId id, int pos, const Settings& s); // pattern index, octaves, rate index, %, velocity
 
-// Steps of the selected curve on the 1..8 scale (1 = each series' min, 8 = its max).
+// Steps of the selected curve on the 1..8 scale. Each series plays the curve's shape stretched
+// over its range: the lowest step is its min, the highest its max (a flat curve: 1 = min, 8 = max).
 // Fills `out` (capacity 8) without allocating; returns the number of steps.
 int curveSteps (const Settings& s, std::array<double, maxCustomSteps>& out);
 

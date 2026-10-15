@@ -677,6 +677,22 @@ TEST_CASE ("curve: Custom 1, 5, 6, 8 on each series' own range, all series toget
     CHECK_EQ (octave, (Vec { 1, 3, 3, 4, 1 }));
 }
 
+TEST_CASE ("curve: the curve's shape is stretched over the range (lowest step = min, highest = max)")
+{
+    // Regression: 1, 2 on the fixed 1..8 scale rounded to the min on short ranges (octave 1..4,
+    // 3 positions for velocity steps... every value stayed at the bottom)
+    const auto [velocity, octave] = walkCurve (custom (curveSet (Curve::Linear, Shape::Up), { 1, 2 }), 3);
+    CHECK_EQ (velocity, (Vec { -4, 4, -4 }));
+    CHECK_EQ (octave, (Vec { 1, 4, 1 }));
+    CHECK_EQ (walkCurve (custom (curveSet (Curve::Linear, Shape::Up), { 3, 4 }), 3).second, (Vec { 1, 4, 1 }));
+}
+
+TEST_CASE ("curve: a flat curve keeps the 1..8 scale")
+{
+    CHECK_EQ (walkCurve (custom (curveSet (Curve::Linear, Shape::Up), { 5, 5 }), 2).first, (Vec { 1, 1 }));
+    CHECK_EQ (walkCurve (custom (curveSet (Curve::Linear, Shape::Up), { 8 }), 2).second, (Vec { 4, 4 }));
+}
+
 TEST_CASE ("curve: Down plays the list backward, Up-Down forward then back")
 {
     CHECK_EQ (walkCurve (custom (curveSet (Curve::Linear, Shape::Down), { 1, 5, 6, 8 }), 5).first, (Vec { 4, 2, 1, -4, 4 }));
@@ -693,7 +709,8 @@ TEST_CASE ("curve: Accelerating small steps first; Decelerating the reverse")
 TEST_CASE ("curve: Fibonacci and Primes use their step lists")
 {
     CHECK_EQ (walkCurve (curveSet (Curve::Fibonacci, Shape::Up), 6).first, (Vec { -4, -3, -2, 1, 4, -4 }));
-    CHECK_EQ (walkCurve (curveSet (Curve::Primes, Shape::Up), 5).first, (Vec { -3, -2, 1, 3, -3 }));
+    // 2, 3, 5, 7 stretched over the range (the prototype: -3, -2, 1, 3 on the 1..8 scale)
+    CHECK_EQ (walkCurve (curveSet (Curve::Primes, Shape::Up), 5).first, (Vec { -4, -2, 1, 4, -4 }));
 }
 
 TEST_CASE ("curve: Random picks steps from the scale and never repeats the previous one")

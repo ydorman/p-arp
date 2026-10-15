@@ -422,12 +422,26 @@ void Progression::applyCurve (const Settings& s, bool isCycleEnd)
     std::array<double, maxCustomSteps> steps {};
     const int count = curveSteps (s, steps);
     const double step = steps[(size_t) std::min (curve.index, count - 1)];
+    // The curve's shape is stretched over each range: its lowest step is the min, its highest the
+    // max (so 1, 2 plays min, max even on a 2-value range). A flat curve keeps the 1..8 scale.
+    double lowest = steps[0], highest = steps[0];
+    for (int i = 1; i < count; ++i)
+    {
+        lowest = std::min (lowest, steps[(size_t) i]);
+        highest = std::max (highest, steps[(size_t) i]);
+    }
+    if (highest - lowest < 1e-9)
+    {
+        lowest = 1.0;
+        highest = 8.0;
+    }
+    const double fraction = (step - lowest) / (highest - lowest);
     for (auto id : allSeries)
     {
         if (! isSeriesActive (id, s) || (isCycleOnly (id) && ! isCycleEnd))
             continue;
         const auto b = seriesBounds (id, s);
-        positions[(size_t) id].pos = b.minPos + int (jsRound ((step - 1.0) / 7.0 * double (b.maxPos - b.minPos)));
+        positions[(size_t) id].pos = b.minPos + int (jsRound (fraction * double (b.maxPos - b.minPos)));
     }
 }
 

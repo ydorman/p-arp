@@ -4,41 +4,15 @@ import { PatternIcon } from "./components/icons";
 import { PATTERN_NAMES } from "./params/spec";
 import { GateRow, HumanizeRow, OctaveRow, PatternRow, RateRow, SwingRow, VelocityRow } from "./components/Targets";
 import { useEngineStatus } from "./hooks/useEngineStatus";
+import { CurveControl } from "./components/CurveEditor";
 import { LiveView } from "./components/LiveView";
 import * as Juce from "./juce/index.js";
-import { useParam } from "./params/store";
 
 const SHAPES = [
   { label: "↗", title: "Up: rise through the range, then jump back" },
   { label: "↘", title: "Down: fall through the range, then jump back" },
   { label: "⋀", title: "Up-Down: start at the base, bounce between the ends" },
 ];
-
-// Curve preview: the curve's steps on the 1..8 scale as small bars (Random has no fixed shape)
-const CURVES: Record<number, number[]> = {
-  0: [1, 2, 3, 4, 5, 6, 7, 8],
-  1: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => 1 + 7 * (i / 7) ** 2),
-  2: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => 1 + 7 * (1 - (1 - i / 7) ** 2)),
-  3: [1, 2, 3, 5, 8],
-  4: [2, 3, 5, 7],
-};
-
-const CUSTOM_STEP_IDS = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => `customStep${i}`);
-
-function CurveControl() {
-  const curve = useParam("curve");
-  const length = useParam("customLength").value;
-  const custom = CUSTOM_STEP_IDS.map((id) => useParam(id).value).slice(0, length); // fixed hook count
-  const steps = curve.value === 6 ? custom : CURVES[curve.value];
-  return (
-    <div className="curve-control">
-      <Select param="curve" title="The path the progressions take through their ranges" />
-      <div className="curve-preview" title={curve.value === 6 ? "Custom curve (editor coming)" : "Curve shape"}>
-        {steps ? steps.map((s, i) => <span key={i} style={{ height: `${(s / 8) * 100}%` }} />) : <em>?</em>}
-      </div>
-    </div>
-  );
-}
 
 function Labeled({ label, children }: { label: string; children: ReactNode }) {
   return (

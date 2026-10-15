@@ -118,7 +118,23 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   scrollbars; matches Logic's own plugins (Decapitator-style non-resizable is the simpler variant).
 - **UI open items (after engine integration):** visual design pass (fonts, sizes, colors); window
   resizing doesn't work in Logic yet (stage scales in a browser; the editor's resizable/aspect
-  setup needs debugging); curve step editor; Octave Transpose base/span presentation.
+  setup needs debugging); Octave Transpose base/span presentation.
+- **Curve editor:** a popover from the curve preview (also opens when Custom is picked from the
+  menu): 8 columns x 8 levels, click or drag across columns to draw, drawing past the end adds
+  steps, a stepper sets the length. Opened on a preset it shows the preset's steps; the first
+  edit copies them (rounded to whole levels) into the custom steps and switches to Custom, so
+  presets are starting points. Steps past the length keep their values (dimmed) for when the
+  curve is lengthened again. A drag keeps its own length copy, because plugin parameter values
+  come back asynchronously.
+- **Curve steps stretch to the range (plugin only):** on the prototype's fixed 1..8 scale (1 =
+  min, 8 = max) a curve like 1, 2 rounded to the min on short ranges (pattern Up..Down, octave
+  -1..+1), so it played one setting forever (reported in Logic). Now the curve's lowest step maps
+  to each range's min and its highest to its max; a flat curve keeps the fixed scale. Linear,
+  Accelerating, Decelerating, Fibonacci and Random are unchanged (they span 1..8); Primes (2..7)
+  now reaches both ends. Rejected: steps as absolute positions (exact on short ranges, but curves
+  drawn up to 8 flatten at the top of a 3-value range, and the presets would all change).
+  Differs from the prototype: replaying a plugin log that uses a custom curve or Primes in the
+  prototype mock will mismatch.
 - **Live view:** a piano roll of the generated notes over the last 2 bars, playhead at 86% so
   sounding notes' tails show. Rate, octave, pattern and gate read directly from the notes'
   placement and length; velocity is the note color (Logic's piano roll scale, purple at 0 to red

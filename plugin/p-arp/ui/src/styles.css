@@ -155,6 +155,7 @@ select {
 }
 
 .curve-control {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -168,7 +169,14 @@ select {
   height: 24px;
   padding: 2px;
   background: var(--panel-2);
+  border: 1px solid transparent;
   border-radius: 4px;
+  cursor: pointer;
+}
+
+.curve-preview:hover,
+.curve-preview.open {
+  border-color: var(--accent);
 }
 
 .curve-preview span {
@@ -178,9 +186,96 @@ select {
   min-height: 2px;
 }
 
-.curve-preview em {
-  margin: auto;
+.curve-preview span.random {
+  opacity: 0.45;
+}
+
+.curve-editor {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  width: 300px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  white-space: normal;
+}
+
+.curve-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.curve-editor-title {
+  font-weight: 600;
+}
+
+.curve-editor-body {
+  display: flex;
+  gap: 6px;
+}
+
+.curve-editor-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.curve-editor-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  height: 128px;
+  cursor: crosshair;
+  touch-action: none;
+  /* 8 level lines */
+  background: repeating-linear-gradient(to top, var(--line) 0 1px, transparent 1px 16px);
+}
+
+.curve-column {
+  display: flex;
+  align-items: flex-end;
+}
+
+.curve-bar {
+  position: relative;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+
+.curve-bar span {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--bg);
+  font-weight: 650;
+}
+
+.curve-column.unused .curve-bar {
+  background: var(--line);
+}
+
+.curve-column.unused .curve-bar span {
+  color: var(--faint);
+}
+
+.curve-editor-foot {
+  margin-top: 8px;
   color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
 }
 
 .live-view {
