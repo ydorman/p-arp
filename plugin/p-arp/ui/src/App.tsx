@@ -6,7 +6,7 @@ import { GateRow, HumanizeRow, OctaveRow, PatternRow, RateRow, SwingRow, Velocit
 import { useEngineStatus } from "./hooks/useEngineStatus";
 import { CurveControl } from "./components/CurveEditor";
 import { LiveView } from "./components/LiveView";
-import * as Juce from "./juce/index.js";
+import { nativeFunction } from "./native";
 
 const SHAPES = [
   { label: "↗", title: "Up: rise through the range, then jump back" },
@@ -23,10 +23,6 @@ function Labeled({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function nativeFunction(name: string) {
-  const functions = window.__JUCE__.initialisationData.__juce__functions;
-  return Array.isArray(functions) && functions.includes(name) ? Juce.getNativeFunction(name) : null;
-}
 const setDebugLog = nativeFunction("setDebugLog");
 const revealDebugLog = nativeFunction("revealDebugLog");
 

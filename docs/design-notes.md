@@ -116,9 +116,13 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   (1000 x 640) and never reflows or wraps; resizing the plugin window (aspect ratio locked,
   75%-150%) scales the whole panel. Chosen over web-style reflow (positions moving around) and
   scrollbars; matches Logic's own plugins (Decapitator-style non-resizable is the simpler variant).
-- **UI open items (after engine integration):** visual design pass (fonts, sizes, colors); window
-  resizing doesn't work in Logic yet (stage scales in a browser; the editor's resizable/aspect
-  setup needs debugging); Octave Transpose base/span presentation.
+- **UI open items (after engine integration):** visual design pass (fonts, sizes, colors);
+  Octave Transpose base/span presentation.
+- **Window resizing:** Logic doesn't resize AU plugin windows by dragging their edges, and JUCE's
+  corner resizer is a JUCE component, hidden under the native web view (WKWebView sits above all
+  JUCE components). So the page draws its own grip (bottom-right) and calls the editor's
+  `setEditorWidth` native function (screen-coordinate drag, one call per frame; double-click =
+  100%); the editor keeps the aspect ratio (75%..150%) and the width is saved with the project.
 - **Curve editor:** a popover from the curve preview (also opens when Custom is picked from the
   menu): 8 columns x 8 levels, click or drag across columns to draw, drawing past the end adds
   steps, a stepper sets the length. Opened on a preset it shows the preset's steps; the first

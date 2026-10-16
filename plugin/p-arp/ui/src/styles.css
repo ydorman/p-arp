@@ -40,9 +40,22 @@ select {
 
 /* Fixed-size stage scaled to the window (see Stage.tsx): nothing reflows or wraps */
 .stage-viewport {
+  position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.resize-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  touch-action: none;
+  /* three diagonal lines */
+  background: linear-gradient(135deg, transparent 0 55%, var(--faint) 55% 60%, transparent 60% 70%, var(--faint) 70% 75%, transparent 75% 85%, var(--faint) 85% 90%, transparent 90%);
 }
 
 .stage {

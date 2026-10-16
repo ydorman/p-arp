@@ -182,12 +182,14 @@ juce::AudioProcessorEditor* ParpProcessor::createEditor()
 namespace
 {
 const juce::Identifier debugLogProperty { "debugLog" };
+const juce::Identifier editorWidthProperty { "editorWidth" };
 }
 
 void ParpProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto tree = state.copyState();
     tree.setProperty (debugLogProperty, debugLog.isEnabled(), nullptr);
+    tree.setProperty (editorWidthProperty, editorWidth.load(), nullptr);
     if (auto xml = tree.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -200,6 +202,8 @@ void ParpProcessor::setStateInformation (const void* data, int sizeInBytes)
             auto tree = juce::ValueTree::fromXml (*xml);
             debugLog.setEnabled (tree.getProperty (debugLogProperty, false));
             tree.removeProperty (debugLogProperty, nullptr);
+            editorWidth = (int) tree.getProperty (editorWidthProperty, 1000);
+            tree.removeProperty (editorWidthProperty, nullptr);
             state.replaceState (tree);
         }
 }

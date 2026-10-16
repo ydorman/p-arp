@@ -59,8 +59,9 @@ public:
     std::atomic<bool> liveNotesEnabled { false };
 
 
-    // Saved with the project (not a host parameter)
+    // Saved with the project (not host parameters)
     DebugLog debugLog;
+    std::atomic<int> editorWidth { 1000 }; // the editor's height follows (fixed aspect ratio)
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

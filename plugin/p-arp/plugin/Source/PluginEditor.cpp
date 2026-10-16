@@ -46,6 +46,11 @@ juce::WebBrowserComponent::Options ParpEditor::createBrowserOptions (ParpEditor&
                            editor.parpProcessor.debugLog.setEnabled (args.size() > 0 && (bool) args[0]);
                            complete (editor.parpProcessor.debugLog.isEnabled());
                        })
+                       .withNativeFunction ("setEditorWidth", [&editor] (const juce::Array<juce::var>& args, auto complete) {
+                           if (args.size() > 0)
+                               editor.setWidth ((int) args[0]);
+                           complete (editor.getWidth());
+                       })
                        .withNativeFunction ("revealDebugLog", [&editor] (const juce::Array<juce::var>&, auto complete) {
                            const auto file = editor.parpProcessor.debugLog.currentFile();
                            if (file.existsAsFile())
@@ -97,15 +102,16 @@ ParpEditor::ParpEditor (ParpProcessor& p)
 #else
     browser.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
 #endif
-    // Fixed layout (like a hardware panel): the UI is designed at 1000 x 640 and scales
-    // proportionally when the window is resized; aspect ratio locked, 75% .. 150%
-    setResizable (true, true);
+    // Fixed layout (like a hardware panel): the UI scales proportionally with the window. The
+    // page draws its own resize grip (JUCE's corner resizer would sit under the native web view)
+    // and calls setEditorWidth; host-initiated resizes keep the aspect ratio too.
+    setResizable (true, false);
     if (auto* constrainer = getConstrainer())
     {
-        constrainer->setFixedAspectRatio (1000.0 / 640.0);
-        constrainer->setSizeLimits (750, 480, 1500, 960);
+        constrainer->setFixedAspectRatio (double (designWidth) / designHeight);
+        constrainer->setSizeLimits (minWidth, minWidth * designHeight / designWidth, maxWidth, maxWidth * designHeight / designWidth);
     }
-    setSize (1000, 640);
+    setWidth (parpProcessor.editorWidth.load());
 
     // Live view feed: drop notes left from an earlier editor, then let the engine push new ones
     parp::LiveNote stale;
@@ -123,6 +129,13 @@ ParpEditor::~ParpEditor()
 void ParpEditor::resized()
 {
     browser.setBounds (getLocalBounds());
+    parpProcessor.editorWidth = getWidth();
+}
+
+void ParpEditor::setWidth (int width)
+{
+    width = juce::jlimit (minWidth, maxWidth, width);
+    setSize (width, (int) std::lround (width * double (designHeight) / designWidth));
 }
 
 void ParpEditor::timerCallback()

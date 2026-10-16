@@ -18,6 +18,11 @@ public:
 
     void resized() override;
 
+    // Fixed layout: designed at this size, scaled with a locked aspect ratio (75% .. 150%)
+    static constexpr int designWidth = 1000, designHeight = 640;
+    static constexpr int minWidth = 750, maxWidth = 1500;
+    void setWidth (int width);
+
 private:
     void timerCallback() override;
     void sendLiveNotes();
