@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Knob, Segmented, Select, Toggle } from "./components/controls";
+import { Knob, OnOff, OnOffButton, Segmented, Select } from "./components/controls";
 import { PatternIcon } from "./components/icons";
 import { PATTERN_NAMES } from "./params/spec";
 import { GateRow, HumanizeRow, OctaveRow, PatternRow, RateRow, SwingRow, VelocityRow } from "./components/Targets";
@@ -34,16 +34,12 @@ function DebugLogSwitch() {
   const file = status.debugLogFile.split("/").pop();
   return (
     <div className="debug-log">
-      <button
-        className={`toggle ${status.debugLog ? "on" : ""}`}
-        role="switch"
-        aria-checked={status.debugLog}
+      <OnOffButton
+        on={status.debugLog}
+        label="Debug log"
         onClick={() => setDebugLog(!status.debugLog)}
         title="Write a debug log (turn on before starting the transport; replay with tests/replay.js)"
-      >
-        <span className="toggle-dot" />
-        <span className="toggle-label">Debug log</span>
-      </button>
+      />
       <button className="debug-log-file" onClick={() => revealDebugLog?.()} title="Show in Finder">
         {file || "~/Library/Logs/p-arp"}
       </button>
@@ -62,9 +58,9 @@ export function App() {
 
       <section className="panel performance">
         <div className="performance-controls">
-          <Toggle param="latch" label="Latch" title="Keep playing the chord after the keys are released" />
+          <OnOff param="latch" label="Latch" large title="Keep playing the chord after the keys are released" />
           <Labeled label="Pattern">
-            <Segmented param="pattern" options={PATTERN_NAMES.map((name, i) => ({ label: <PatternIcon pattern={i} size={15} />, title: name }))} title="Base arp pattern" />
+            <Segmented param="pattern" options={PATTERN_NAMES.map((name, i) => ({ label: <PatternIcon pattern={i} size={18} />, title: name }))} title="Base arp pattern" />
           </Labeled>
           <Labeled label="Shape">
             <Segmented param="shape" options={SHAPES} title="How the progressions move through their ranges" />
@@ -82,19 +78,19 @@ export function App() {
         <div className="performance-main">
           <LiveView />
           <div className="depth" title="How far every progression travels: scales all ranges at once (0% = everything at its base)">
-            <Knob param="globalRange" label="Depth" size={64} format={(v) => `${v}%`} />
+            <Knob param="globalRange" label="Depth" size={80} format={(v) => `${v}%`} />
           </div>
         </div>
       </section>
 
       <main className="targets">
-        <section className="panel">
+        <section className="panel sequence">
           <h2>Sequence</h2>
           <RateRow />
           <OctaveRow />
           <PatternRow />
         </section>
-        <section className="panel">
+        <section className="panel feel">
           <h2>Feel</h2>
           <GateRow />
           <VelocityRow />

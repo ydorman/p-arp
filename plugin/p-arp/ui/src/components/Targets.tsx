@@ -6,15 +6,14 @@ import type { ReactNode } from "react";
 import { useParam } from "../params/store";
 import { PATTERN_NAMES, RATE_NAMES } from "../params/spec";
 import { CellRange, TrackRange } from "./RangeBar";
-import { Knob, Segmented, Select, Stepper, Toggle } from "./controls";
+import { Knob, OnOff, Segmented, Select, Stepper } from "./controls";
 import { NoteIcon, PatternIcon } from "./icons";
 
-function TargetRow({ label, activeParam, children, extras }: { label: string; activeParam?: string; children: ReactNode; extras?: ReactNode }) {
+function TargetRow({ label, activeParam, children, extras, wide }: { label: string; activeParam?: string; children: ReactNode; extras?: ReactNode; wide?: boolean }) {
   return (
-    <div className="target-row">
+    <div className={`target-row ${wide ? "wide" : ""}`}>
       <div className="target-name">
-        {activeParam && <Toggle param={activeParam} title={`Modulate ${label}`} />}
-        <span>{label}</span>
+        {activeParam ? <OnOff param={activeParam} label={label} title={`${label} progression on/off`} /> : <span className="target-label">{label}</span>}
       </div>
       <div className="target-control">{children}</div>
       <div className="target-extras">{extras}</div>
@@ -44,7 +43,7 @@ export function RateRow() {
   const up = useParam("rateSpreadUp");
   const { family, power } = rateInfo[base.value];
   const cells = [0, 1, 2, 3, 4, 5, 6, 7].map((p) => ({
-    content: <NoteIcon power={p} family={family} />,
+    content: <NoteIcon power={p} family={family} size={26} />,
     title: rateInfo[rateIndexOf(family, p)].name,
   }));
   const setFamily = (f: Family) => base.set(rateIndexOf(f, power));
@@ -58,7 +57,7 @@ export function RateRow() {
           <div className="segmented small" title="Rate family">
             {(["straight", "dotted", "triplet"] as Family[]).map((f) => (
               <button key={f} className={family === f ? "selected" : ""} onClick={() => setFamily(f)} title={f}>
-                <NoteIcon power={3} family={f} size={15} />
+                <NoteIcon power={3} family={f} size={17} />
               </button>
             ))}
           </div>
@@ -127,9 +126,9 @@ export function PatternRow() {
   const down = useParam("patternSpreadDown");
   const up = useParam("patternSpreadUp");
   return (
-    <TargetRow label="Pattern" activeParam="patternActive">
+    <TargetRow label="Pattern" activeParam="patternActive" wide>
       <CellRange
-        cells={PATTERN_NAMES.map((name, i) => ({ content: <PatternIcon pattern={i} />, title: name }))}
+        cells={PATTERN_NAMES.map((name, i) => ({ content: <PatternIcon pattern={i} size={20} />, title: name }))}
         base={base.value}
         down={down.value}
         up={up.value}
@@ -156,9 +155,9 @@ function ScaledRow({ label, id, format }: { label: string; id: "gate" | "velocit
   if (id === "velocity" && !active.value) {
     // Velocity progression off: notes keep the velocity they were played with
     return (
-      <TargetRow label={label} activeParam={`${id}Active`}>
-        <div className="as-played" title="Turn on to set a base velocity and a progression">
-          <strong>as played</strong> · notes keep the velocity they were played with
+      <TargetRow label={label} activeParam={`${id}Active`} wide>
+        <div className="as-played" title="Notes keep the velocity they were played with. Turn on to set a base velocity and a progression.">
+          <strong>as played</strong> · each note keeps its velocity
         </div>
       </TargetRow>
     );
@@ -193,8 +192,8 @@ export function HumanizeRow() {
   return (
     <TargetRow label="Humanize">
       <div className="humanize">
-        <Knob param="humanizeVelocity" label="Velocity ±" size={40} format={(v) => `±${v}`} />
-        <Knob param="humanizeGate" label="Gate ±" size={40} format={(v) => `±${v}%`} />
+        <Knob param="humanizeVelocity" label="Velocity ±" size={52} format={(v) => `±${v}`} />
+        <Knob param="humanizeGate" label="Gate ±" size={52} format={(v) => `±${v}%`} />
       </div>
     </TargetRow>
   );

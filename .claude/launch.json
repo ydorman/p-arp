@@ -6,6 +6,11 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "plugin/p-arp/ui", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "p-arp-ui-running",
+      "url": "http://localhost:5173",
+      "port": 5173
     }
   ]
 }

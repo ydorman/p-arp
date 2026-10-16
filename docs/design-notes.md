@@ -116,8 +116,21 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   (1000 x 640) and never reflows or wraps; resizing the plugin window (aspect ratio locked,
   75%-150%) scales the whole panel. Chosen over web-style reflow (positions moving around) and
   scrollbars; matches Logic's own plugins (Decapitator-style non-resizable is the simpler variant).
-- **UI open items (after engine integration):** visual design pass (fonts, sizes, colors);
-  Octave Transpose base/span presentation.
+- **UI open items:** hardware-style look (after feedback on functionality); Octave Transpose
+  base/span presentation.
+- **Hierarchy and controls pass** (user's requirements, references: Logic's Retro Synth and
+  Compressor, Soundtoys Decapitator):
+  - **On/off is a lit button with an LED**, the label on the button, never a settings-style
+    switch (music plugins and hardware don't use switches; the state must read at a glance while
+    playing). Progression rows: the row name is the button ("Rate" lit = Rate progression on).
+  - **Latch is the largest button** (the most important live control).
+  - **Control labels are the largest text** (15px: Pattern, Shape, Advance, Sync, Curve, Rate,
+    Octave, Gate...); section titles (SEQUENCE, FEEL) only group, so they are small and quiet
+    (11px, faint). Values and menus 13px, scale ends 11px.
+  - Selection buttons as big as the space allows (range cells 42px tall); Pattern and the
+    Velocity "as played" text may use the empty extras column.
+  - Tried and rejected: growing the design size to 1100 x 704 for bigger type: at the same
+    window size everything scaled down, so text got no bigger and only the spacing grew.
 - **Window resizing:** Logic doesn't resize AU plugin windows by dragging their edges, and JUCE's
   corner resizer is a JUCE component, hidden under the native web view (WKWebView sits above all
   JUCE components). So the page draws its own grip (bottom-right) and calls the editor's

@@ -5,11 +5,10 @@
 // on the last notes.
 
 import { useEffect, useRef } from "react";
-import { useEngineStatus } from "../hooks/useEngineStatus";
 import { feed, playhead } from "../live/liveFeed";
 
-const WIDTH = 836; // design size (the stage scales it)
-const HEIGHT = 190;
+const WIDTH = 790; // design size (the stage scales it)
+const HEIGHT = 170;
 const GUTTER = 30; // octave labels on the left
 const SCALE_WIDTH = 30; // velocity color scale on the right
 const PLAYHEAD_AT = 0.86; // playhead position across the time area (the rest shows note tails)
@@ -30,7 +29,6 @@ function cssColor(name: string) {
 
 export function LiveView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const status = useEngineStatus();
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -174,6 +172,12 @@ export function LiveView() {
         ctx.stroke();
       }
 
+      if (feed.demo) {
+        ctx.fillStyle = colors.faint;
+        ctx.textAlign = "left";
+        ctx.fillText("demo (outside the plugin)", timeLeft + 6, HEIGHT - 10);
+        ctx.textAlign = "center";
+      }
       if (!visible.length) {
         ctx.fillText(s.playing ? "hold a chord" : "start the transport and hold a chord", (timeLeft + timeRight) / 2, (rollTop + rollBottom) / 2);
       }
@@ -186,14 +190,6 @@ export function LiveView() {
   return (
     <div className="live-view">
       <canvas ref={canvasRef} className="live-canvas" style={{ width: WIDTH, height: HEIGHT }} />
-      <div className="live-status">
-        <span>{feed.demo ? "◆ demo (outside the plugin)" : status.playing ? "▶ playing" : "■ stopped"}</span>
-        <span>{status.bpm > 0 ? `${status.bpm.toFixed(1)} bpm` : "– bpm"}</span>
-        <span>beat {(status.ppq + 1).toFixed(2)}</span>
-        <span>
-          notes {status.noteOnsIn} in / {status.noteOnsOut} out
-        </span>
-      </div>
     </div>
   );
 }

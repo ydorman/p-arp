@@ -1,22 +1,21 @@
-// Small bound controls: Toggle, Select, Segmented, Stepper, Knob. Each takes a parameter id.
+// Bound controls: OnOff, Select, Segmented, Stepper, Knob. Each takes a parameter id.
 
 import { useRef } from "react";
 import type { PointerEvent, ReactNode } from "react";
 import { useParam } from "../params/store";
 import { EditableValue } from "./EditableValue";
 
-export function Toggle({ param, label, title }: { param: string; label?: string; title?: string }) {
+/** On/off as a lit button, like a hardware button with an LED: the label is on the button. */
+export function OnOff({ param, label, title, large }: { param: string; label: string; title?: string; large?: boolean }) {
   const p = useParam(param);
+  return <OnOffButton on={p.value !== 0} label={label} title={title} large={large} onClick={() => p.set(p.value ? 0 : 1)} />;
+}
+
+export function OnOffButton({ on, label, title, large, onClick }: { on: boolean; label: string; title?: string; large?: boolean; onClick: () => void }) {
   return (
-    <button
-      className={`toggle ${p.value ? "on" : ""}`}
-      role="switch"
-      aria-checked={p.value !== 0}
-      title={title}
-      onClick={() => p.set(p.value ? 0 : 1)}
-    >
-      <span className="toggle-dot" />
-      {label && <span className="toggle-label">{label}</span>}
+    <button className={`onoff ${large ? "large" : ""} ${on ? "on" : ""}`} aria-pressed={on} title={title} onClick={onClick}>
+      <span className="led" />
+      <span className="onoff-label">{label}</span>
     </button>
   );
 }
