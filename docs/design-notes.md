@@ -133,6 +133,11 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
     Velocity "as played" text may use the empty extras column.
   - Tried and rejected: growing the design size to 1100 x 704 for bigger type: at the same
     window size everything scaled down, so text got no bigger and only the spacing grew.
+- **Keyboard focus and host shortcuts:** Logic only gets a key (Space = play/stop) when the web
+  view doesn't use it, i.e. when nothing on the page is focused. WebKit doesn't focus buttons on
+  click, but menus (`<select>`) keep focus after use and get it back when the plugin window is
+  activated again, so Space opened the menu instead of starting playback (reported in Logic).
+  The page releases focus after a menu selection and when the window loses focus (`focus.ts`).
 - **Window resizing:** Logic doesn't resize AU plugin windows by dragging their edges, and JUCE's
   corner resizer is a JUCE component, hidden under the native web view (WKWebView sits above all
   JUCE components). So the page draws its own grip (bottom-right) and calls the editor's
