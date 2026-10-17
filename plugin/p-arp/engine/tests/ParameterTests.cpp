@@ -86,3 +86,18 @@ TEST_CASE ("parameters: choices match their ranges")
     CHECK_EQ (findParameter ("baseRate")->choices.front(), std::string_view ("1/1 dotted"));
     CHECK_EQ (findParameter ("advanceTrigger")->choices.back(), std::string_view ("Per 2 Bars"));
 }
+
+TEST_CASE ("parameters: gate, velocity and swing ranges can reach both ends from any base")
+{
+    // Regression: velocity spreads stopped at 64, so a base at the bottom (33) could not reach
+    // 112; the range bar's high handle stuck at 97
+    for (const char* target : { "gate", "velocity", "swing" })
+    {
+        const auto* base = findParameter (target);
+        const auto* down = findParameter (std::string (target) + "SpreadDown");
+        const auto* up = findParameter (std::string (target) + "SpreadUp");
+        REQUIRE (base != nullptr && down != nullptr && up != nullptr);
+        CHECK_EQ (down->max, base->max - base->min);
+        CHECK_EQ (up->max, base->max - base->min);
+    }
+}

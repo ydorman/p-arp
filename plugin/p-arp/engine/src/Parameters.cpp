@@ -74,8 +74,8 @@ std::vector<ParamSpec> buildSpecs()
         // Velocity
         { "velocity", "Velocity Base", "Velocity", K::Int, 1, 127, "", none, PARP_INT (velocity) },
         { "velocityActive", "Velocity Mod Active", "Velocity", K::Bool, 0, 1, "", none, PARP_BOOL (velocityActive) },
-        { "velocitySpreadDown", "Velocity Spread (-) Down", "Velocity", K::Int, 0, 64, "", none, PARP_INT (velocitySpreadDown) },
-        { "velocitySpreadUp", "Velocity Spread (+) Up", "Velocity", K::Int, 0, 64, "", none, PARP_INT (velocitySpreadUp) },
+        { "velocitySpreadDown", "Velocity Spread (-) Down", "Velocity", K::Int, 0, 126, "", none, PARP_INT (velocitySpreadDown) },
+        { "velocitySpreadUp", "Velocity Spread (+) Up", "Velocity", K::Int, 0, 126, "", none, PARP_INT (velocitySpreadUp) },
         { "velocitySteps", "Velocity Steps (per side)", "Velocity", K::Int, 1, 8, "", none, PARP_INT (velocitySteps) },
 
         // Swing

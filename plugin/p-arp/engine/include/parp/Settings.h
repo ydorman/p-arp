@@ -57,7 +57,7 @@ struct Settings
     // Velocity series
     int velocity = 70; // 1..127
     bool velocityActive = false;
-    int velocitySpreadDown = 25, velocitySpreadUp = 25; // 0..64
+    int velocitySpreadDown = 25, velocitySpreadUp = 25; // 0..126 (prototype: 0..64)
     int velocitySteps = 4;
 
     // Swing series (%)
