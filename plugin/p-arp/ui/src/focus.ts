@@ -1,11 +1,15 @@
 // Keyboard focus must not stay on the page's controls, or the host's shortcuts stop working:
-// keys go to the focused element instead of Logic (Space opens a dropdown instead of starting
-// the transport). Logic gets a key only when the web view doesn't use it, i.e. when nothing is
-// focused. WebKit doesn't focus buttons on click, but menus (<select>) keep focus after use and
-// get it back when the plugin window is activated again.
+// keys go to the focused element instead of Logic (Space would press a control or open a menu
+// instead of starting the transport). Logic gets a key only when the web view doesn't use it,
+// i.e. when nothing is focused.
 //
-// So: release focus after a menu selection, and whenever the plugin window loses focus (a value
-// being typed commits, as when clicking elsewhere on the page).
+// Menus are our own and never take focus (see Select). As a safety net, anything else that gets
+// focus releases it at once, except text fields (a value being typed); and when the plugin window
+// loses focus, a value being typed commits, as when clicking elsewhere on the page.
+
+function isTextField(el: Element | null) {
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+}
 
 function release() {
   const active = document.activeElement;
@@ -13,8 +17,11 @@ function release() {
 }
 
 export function installFocusRelease() {
-  document.addEventListener("change", (e) => {
-    if (e.target instanceof HTMLSelectElement) e.target.blur();
+  document.addEventListener("focusin", (e) => {
+    const target = e.target;
+    // blur() during the focus change itself is ignored: release right after it
+    if (target instanceof HTMLElement && !isTextField(target))
+      setTimeout(() => document.activeElement === target && target.blur(), 0);
   });
   window.addEventListener("blur", release);
 }

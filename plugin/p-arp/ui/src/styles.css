@@ -458,12 +458,82 @@ select {
 }
 
 .select {
+  position: relative;
+  display: inline-block;
+}
+
+.select-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   height: var(--control-height);
+  padding: 0 8px 0 10px;
   font-size: var(--fs-value);
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.select-button:hover,
+.select.open .select-button {
+  border-color: var(--faint);
+}
+
+.select-value {
+  display: grid;
+  text-align: left;
+}
+
+.select-value > span {
+  grid-area: 1 / 1;
+}
+
+.select-value > .hidden {
+  visibility: hidden;
+}
+
+.select-arrow {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
+  padding: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.select-menu button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font-size: var(--fs-value);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.select-menu button:hover {
+  background: var(--on-bg);
+}
+
+.select-menu button.selected {
+  color: var(--on);
+  font-weight: 600;
 }
 
 .segmented {

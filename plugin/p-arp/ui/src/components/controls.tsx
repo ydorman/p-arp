@@ -1,6 +1,6 @@
 // Bound controls: OnOff, Select, Segmented, Stepper, Knob. Each takes a parameter id.
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent, ReactNode } from "react";
 import { useParam } from "../params/store";
 import { EditableValue } from "./EditableValue";
@@ -20,17 +20,72 @@ export function OnOffButton({ on, label, title, large, onClick }: { on: boolean;
   );
 }
 
+/**
+ * Menu. Our own, not a native <select>: a native menu keeps keyboard focus after use (also when
+ * the same value is picked again or the menu is dismissed), and then Space opens it instead of
+ * reaching Logic's transport. Nothing here can take focus.
+ */
 export function Select({ param, labels, title }: { param: string; labels?: string[]; title?: string }) {
   const p = useParam(param);
   const options = labels ?? p.spec.choices ?? [];
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: globalThis.PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const close = () => setOpen(false);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", close);
+    };
+  }, [open]);
+
+  const noFocus = (e: PointerEvent) => e.preventDefault();
   return (
-    <select className="select" value={p.value} title={title} onChange={(e) => p.set(Number(e.target.value))}>
-      {options.map((label, i) => (
-        <option key={i} value={i}>
-          {label}
-        </option>
-      ))}
-    </select>
+    <div className={`select ${open ? "open" : ""}`} ref={root}>
+      <button className="select-button" tabIndex={-1} title={title} onPointerDown={noFocus} onClick={() => setOpen(!open)}>
+        {/* every option stacked in one grid cell, only the current one visible: the button is
+            as wide as the longest option, so choosing never shifts the layout */}
+        <span className="select-value">
+          {options.map((label, i) => (
+            <span key={i} className={i === p.value ? "" : "hidden"}>
+              {label}
+            </span>
+          ))}
+        </span>
+        <span className="select-arrow" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div className="select-menu" role="listbox">
+          {options.map((label, i) => (
+            <button
+              key={i}
+              role="option"
+              aria-selected={i === p.value}
+              tabIndex={-1}
+              className={i === p.value ? "selected" : ""}
+              onPointerDown={noFocus}
+              onClick={() => {
+                p.set(i);
+                setOpen(false);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
