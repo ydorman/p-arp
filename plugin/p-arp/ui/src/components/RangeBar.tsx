@@ -5,7 +5,7 @@
 // Dragging is handled by the whole bar (a persistent element), not by the handle elements: the
 // handles move as the range changes, and a capture held by a moved/re-created element is lost.
 
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent, ReactNode } from "react";
 import { EditableValue } from "./EditableValue";
 
@@ -123,6 +123,15 @@ export function TrackRange(props: TrackRangeProps) {
   const { min, max, base, down, up, maxSpreadDown, maxSpreadUp, steps, active, format, onBase, onDown, onUp, onGesture } = props;
   const track = useRef<HTMLDivElement>(null);
   const dragging = useRef<Grip | null>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+  useLayoutEffect(() => setTrackWidth(track.current?.offsetWidth ?? 0), []);
+  // Rendered label widths (measured after each render; labels are placed with them next render)
+  const labelRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const [labelWidths, setLabelWidths] = useState<number[]>([]);
+  useLayoutEffect(() => {
+    const widths = labelRefs.current.filter(Boolean).map((el) => el!.offsetWidth);
+    if (widths.join() !== labelWidths.join()) setLabelWidths(widths);
+  });
   const low = Math.max(min, base - down);
   const high = Math.min(max, base + up);
   const pct = (v: number) => ((v - min) / (max - min)) * 100;
@@ -165,6 +174,16 @@ export function TrackRange(props: TrackRangeProps) {
     }
   }
 
+  // Value labels sit under their markers (base, and the range ends when the progression is on),
+  // pushed apart where they would overlap and kept inside the track
+  const labels: { value: number; kind: "low" | "base" | "high" }[] = [];
+  if (active && low < base) labels.push({ value: low, kind: "low" });
+  labels.push({ value: base, kind: "base" });
+  if (active && high > base) labels.push({ value: high, kind: "high" });
+  const widths = labels.map((_, i) => labelWidths[i] ?? LABEL_WIDTH);
+  const centers = placeLabels(labels.map((l) => (pct(l.value) / 100) * trackWidth), trackWidth, widths);
+  labelRefs.current.length = labels.length;
+
   // Typed values go through the same gesture so the host records them as one automation step
   const typed = (apply: (v: number) => void) => (v: number) => {
     onGesture?.(true);
@@ -198,16 +217,35 @@ export function TrackRange(props: TrackRangeProps) {
         )}
       </div>
       <div className="track-values">
-        {active ? (
-          <>
-            <EditableValue value={low} format={format} onCommit={typed((v) => onDown(clampDown(base - v)))} title="Lowest value (double-click to type)" />
-            <EditableValue className="strong" value={base} format={format} onCommit={typed((v) => onBase(Math.min(max, Math.max(min, v))))} title="Base (double-click to type)" />
-            <EditableValue value={high} format={format} onCommit={typed((v) => onUp(clampUp(v - base)))} title="Highest value (double-click to type)" />
-          </>
-        ) : (
-          <EditableValue className="strong" value={base} format={format} onCommit={typed((v) => onBase(Math.min(max, Math.max(min, v))))} title="Base (double-click to type)" />
-        )}
+        {labels.map((l, i) => (
+          <span key={l.kind} ref={(el) => { labelRefs.current[i] = el; }} className="track-value" style={{ left: centers[i] }}>
+            {l.kind === "low" && (
+              <EditableValue value={low} format={format} onCommit={typed((v) => onDown(clampDown(base - v)))} title="Lowest value (double-click to type)" />
+            )}
+            {l.kind === "base" && (
+              <EditableValue className="strong" value={base} format={format} onCommit={typed((v) => onBase(Math.min(max, Math.max(min, v))))} title="Base (double-click to type)" />
+            )}
+            {l.kind === "high" && (
+              <EditableValue value={high} format={format} onCommit={typed((v) => onUp(clampUp(v - base)))} title="Highest value (double-click to type)" />
+            )}
+          </span>
+        ))}
       </div>
     </div>
   );
+}
+
+const LABEL_WIDTH = 30; // px assumed per value label until measured
+const LABEL_GAP = 4; // px between neighbouring labels
+const LABEL_OVERHANG = 6; // end labels may reach this far past the track (its margin)
+
+/** Label centers (px) for ascending positions and label widths: as close to their positions as
+ *  possible without overlapping, within the track (plus the overhang). */
+export function placeLabels(positions: number[], trackWidth: number, widths: number[]): number[] {
+  const n = positions.length;
+  const apart = (i: number) => (widths[i] + widths[i + 1]) / 2 + LABEL_GAP; // between i and i + 1
+  const c = [...positions];
+  for (let i = 0; i < n; i++) c[i] = Math.max(c[i], i === 0 ? widths[0] / 2 - LABEL_OVERHANG : c[i - 1] + apart(i - 1));
+  for (let i = n - 1; i >= 0; i--) c[i] = Math.min(c[i], i === n - 1 ? trackWidth - widths[n - 1] / 2 + LABEL_OVERHANG : c[i + 1] - apart(i));
+  return c;
 }

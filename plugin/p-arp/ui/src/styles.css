@@ -756,8 +756,7 @@ select {
   top: calc(100% + 3px);
   left: 0;
   right: 0;
-  display: flex;
-  justify-content: space-between;
+  height: 14px;
   margin: 0 6px;
   font-size: var(--fs-small);
   line-height: 1.2;
@@ -770,8 +769,11 @@ select {
   display: block;
 }
 
-.track-range.off .track-values {
-  justify-content: center;
+.track-value {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 /* Progression off: the base is still the value in use, so it stays fully active; only the range
