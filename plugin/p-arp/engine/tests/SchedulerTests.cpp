@@ -332,7 +332,7 @@ TEST_CASE ("modulation: linked octave and velocity during playback")
         s.velocityActive = true;
         s.velocitySpreadDown = 25;
         s.velocitySpreadUp = 25;
-        s.link = LinkMode::SharedPhase;
+        s.link = LinkMode::Locked;
         s.shape = Shape::Up;
         s.velocity = 70;
     }));

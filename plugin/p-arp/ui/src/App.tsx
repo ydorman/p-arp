@@ -68,8 +68,8 @@ export function App() {
           <Labeled label="Advance">
             <Select param="advanceTrigger" title="When the progressions take a step" />
           </Labeled>
-          <Labeled label="Sync">
-            <Select param="link" labels={["Free", "Locked", "Restart"]} title="Free: each progression on its own. Locked: all reach min/base/max together. Restart: all restart with the longest." />
+          <Labeled label="Link">
+            <Select param="link" title="Free: each progression on its own. Locked: all reach min/base/max together. Restart: all restart with the longest." />
           </Labeled>
           <Labeled label="Curve">
             <CurveControl />

@@ -61,12 +61,14 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   later block; releasing the chord in between left a ghost note playing after the release.
   A real plugin must keep its own queue for note-offs and future notes (no `sendAtBeat`).
 - **Pattern series is cycle-only**: switching patterns on every note just scrambles them.
-- **Link Series**: Shared Phase (one position mapped onto every range) and Restart Together (each
-  steps on its own, all restart with the longest pass). Off is the default.
+- **Link** (was "Link Series": Off / Shared Phase / Restart Together; renamed 2026-10, and
+  briefly labeled "Sync" in the plugin UI, dropped because "sync" in music plugins means tempo
+  sync): Locked (one position mapped onto every range) and Restart (each steps on its own, all
+  restart with the longest pass). Free is the default.
 - **Global Range**: one knob, same % on both sides. *Rejected:* separate (-)/(+) knobs.
   Whole-value series round to the nearest step; step-based series compress distance.
 - **Series Curve**: steps on a 1-8 scale (1 = min, 8 = max of each series' range), global for all
-  series; Link Series is ignored while a curve is active.
+  series; Link is ignored while a curve is active.
 - **Octave Mode**: `Range` (cycle grows by an octave per step - a 2-octave cycle repeats the
   1-octave notes then adds the octave above, which sounds like "low, low, high") vs `Transpose`
   (same notes, shifted register - "low, high"). Both kept; Range is the original definition.
@@ -165,7 +167,7 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
   continuously through cycles. Canvas drawn each animation frame, playhead extrapolated between
   status updates. A demo feed runs in a plain browser.
 - **GUI ideas to tame ~47 controls:** one panel per target with a single on/off; Global Range,
-  Link Series and Series Curve as the main "performance" controls; Custom Series as a visual step
+  Link and Series Curve as the main "performance" controls; Custom Series as a visual step
   editor; series visualizer with playhead; debug/humanize in an advanced panel.
 
 ### Spike (first step)

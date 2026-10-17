@@ -83,9 +83,9 @@ var PluginParameters = [
     defaultValue: 0 // Up
   },
   {
-    name: "Link Series",
+    name: "Link",
     type: "menu",
-    valueStrings: ["Off", "Shared Phase", "Restart Together"],
+    valueStrings: ["Free", "Locked", "Restart"],
     defaultValue: 0 // Off: each series moves on its own
   },
   {
@@ -500,9 +500,9 @@ var CURVE_PRIMES = 4;
 var CURVE_RANDOM = 5;
 var CURVE_CUSTOM = 6;
 
-// Link Series menu
-var LINK_OFF = 0;
-var LINK_SHARED = 1;
+// Link menu
+var LINK_FREE = 0;
+var LINK_LOCKED = 1;
 var LINK_RESTART = 2;
 
 // Subdiv Change Timing menu
@@ -598,11 +598,11 @@ var SERIES_NAMES = ["pattern", "octave", "subdiv", "gate", "velocity", "swing"];
 // Series state (for Up-Down / Triangle bounce): { name: { pos, dir } }
 var seriesState = {};
 
-// Link Series state.
-// Shared Phase: a master position from -down..+up (0 = every series at its base), walked with
+// Link state.
+// Locked: a master position from -down..+up (0 = every series at its base), walked with
 //   the progression shape; each series maps it onto its own range, so all reach their min, base
 //   and max together (series with a shorter range hold values).
-// Restart Together: count of advances; all series restart when the longest pass completes.
+// Restart: count of advances; all series restart when the longest pass completes.
 var linkState = { pos: 0, dir: 1, count: 0 };
 
 // Series Curve state: index into the curve's step list, and direction (for Up-Down)
@@ -1012,7 +1012,7 @@ function advanceCurve(isCycleEnd) {
   return completed ? allCompleted() : {};
 }
 
-// Shared Phase master range: the largest distance below / above the base over active series
+// Locked master range: the largest distance below / above the base over active series
 function getLinkRange() {
   var down = 0;
   var up = 0;
@@ -1026,7 +1026,7 @@ function getLinkRange() {
   return { down: down, up: up };
 }
 
-// Shared Phase: a series' position for a master position (scaled onto the series' own range)
+// Locked: a series' position for a master position (scaled onto the series' own range)
 function getLinkedPos(name, masterPos, range) {
   var b = getSeriesBounds(name);
   if (masterPos >= 0) {
@@ -1047,17 +1047,17 @@ function getPassLength(name, shape) {
 // Advance series for all active modulations.
 // isCycleEnd: true when called at the end of an arp cycle (cycleOnly series advance only then)
 // Returns { name: true } for each series that just completed a full pass (back at its start);
-// with Link Series on, all series complete their pass together.
+// with Link on, all series complete their pass together.
 function advanceProgressions(isCycleEnd) {
   if (isCurveActive()) {
     return advanceCurve(isCycleEnd);
   }
   var link = GetParameter(PARAM_LINK);
-  if (link === LINK_SHARED) {
-    return advanceShared(isCycleEnd);
+  if (link === LINK_LOCKED) {
+    return advanceLocked(isCycleEnd);
   }
   if (link === LINK_RESTART) {
-    return advanceRestartTogether(isCycleEnd);
+    return advanceRestart(isCycleEnd);
   }
   return advanceIndependent(isCycleEnd);
 }
@@ -1071,7 +1071,7 @@ function allCompleted() {
   return completed;
 }
 
-function advanceShared(isCycleEnd) {
+function advanceLocked(isCycleEnd) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
   var range = getLinkRange();
   var result = stepSeriesValue(linkState.pos, linkState.dir, -range.down, range.up, shape);
@@ -1091,7 +1091,7 @@ function advanceShared(isCycleEnd) {
   return {};
 }
 
-function advanceRestartTogether(isCycleEnd) {
+function advanceRestart(isCycleEnd) {
   var shape = GetParameter(PARAM_PROG_SHAPE);
   advanceIndependent(isCycleEnd);
   // The longest pass among the series that advance on every trigger (cycleOnly series advance
@@ -1577,7 +1577,7 @@ function ParameterChanged(param, value) {
   // Restart a series when its position falls outside its bounds, or when its
   // base, active toggle, or the progression shape changes. Linked series (and series following
   // a curve) restart together; changing the curve or its steps restarts it.
-  var linked = (GetParameter(PARAM_LINK) !== LINK_OFF) || isCurveActive();
+  var linked = (GetParameter(PARAM_LINK) !== LINK_FREE) || isCurveActive();
   var resyncAll = (param === PARAM_LINK) || (param === PARAM_CURVE) ||
                   (param >= PARAM_CUSTOM_LENGTH && param <= PARAM_CUSTOM_STEP_1 + 7);
   for (var i = 0; i < SERIES_NAMES.length; i++) {

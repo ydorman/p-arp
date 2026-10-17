@@ -304,9 +304,9 @@ SeriesSet Progression::advance (const Settings& s, bool isCycleEnd)
         return advanceCurve (s, isCycleEnd);
     switch (s.link)
     {
-        case LinkMode::SharedPhase:     return advanceShared (s, isCycleEnd);
-        case LinkMode::RestartTogether: return advanceRestartTogether (s, isCycleEnd);
-        case LinkMode::Off:             break;
+        case LinkMode::Locked:     return advanceLocked (s, isCycleEnd);
+        case LinkMode::Restart: return advanceRestart (s, isCycleEnd);
+        case LinkMode::Free:             break;
     }
     return advanceIndependent (s, isCycleEnd);
 }
@@ -337,7 +337,7 @@ SeriesSet Progression::advanceIndependent (const Settings& s, bool isCycleEnd)
     return completed;
 }
 
-// Shared Phase: the largest distance below / above the base over active series
+// Locked: the largest distance below / above the base over active series
 Progression::LinkRange Progression::linkRange (const Settings& s)
 {
     LinkRange range;
@@ -352,7 +352,7 @@ Progression::LinkRange Progression::linkRange (const Settings& s)
     return range;
 }
 
-// Shared Phase: a series' position for a master position (scaled onto its own range)
+// Locked: a series' position for a master position (scaled onto its own range)
 int Progression::linkedPos (SeriesId id, int masterPos, LinkRange range, const Settings& s)
 {
     const auto b = seriesBounds (id, s);
@@ -365,7 +365,7 @@ int Progression::linkedPos (SeriesId id, int masterPos, LinkRange range, const S
     return b.basePos - int (jsRound (double (-masterPos) / double (range.down) * double (b.basePos - b.minPos)));
 }
 
-SeriesSet Progression::advanceShared (const Settings& s, bool isCycleEnd)
+SeriesSet Progression::advanceLocked (const Settings& s, bool isCycleEnd)
 {
     const auto range = linkRange (s);
     const auto stepped = stepSeriesValue ({ link.pos, link.dir }, -range.down, range.up, s.shape);
@@ -392,7 +392,7 @@ int Progression::passLength (SeriesId id, Shape shape, const Settings& s)
     return shape == Shape::UpDown ? 2 * span : span + 1;
 }
 
-SeriesSet Progression::advanceRestartTogether (const Settings& s, bool isCycleEnd)
+SeriesSet Progression::advanceRestart (const Settings& s, bool isCycleEnd)
 {
     advanceIndependent (s, isCycleEnd);
     // Longest pass among series advancing on every trigger (cycle-only series advance at a
@@ -506,7 +506,7 @@ SettingsChangeResult Progression::applySettingsChange (const Settings& before, c
     // Restart a series when its position falls outside its bounds, or when its base, active
     // toggle, or the shape changes. Linked series (and series following a curve) restart
     // together; changing the curve or its steps restarts it.
-    const bool linked = after.link != LinkMode::Off || after.curve != Curve::Linear;
+    const bool linked = after.link != LinkMode::Free || after.curve != Curve::Linear;
     const bool linkChanged = before.link != after.link;
     const bool curveChanged = before.curve != after.curve;
     const bool customChanged = before.customLength != after.customLength || before.customSteps != after.customSteps;

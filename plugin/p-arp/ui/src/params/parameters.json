@@ -2,7 +2,7 @@
   { "id": "latch", "name": "Latch Chord", "group": "Global", "kind": "bool", "min": 0, "max": 1, "defaultValue": 0 },
   { "id": "advanceTrigger", "name": "Advance Trigger", "group": "Global", "kind": "choice", "min": 0, "max": 4, "defaultValue": 0, "choices": ["Per Arp Cycle", "Per Note Step", "Per Beat", "Per Bar", "Per 2 Bars"] },
   { "id": "shape", "name": "Progression Shape", "group": "Global", "kind": "choice", "min": 0, "max": 2, "defaultValue": 0, "choices": ["Up", "Down", "Up-Down (Triangle)"] },
-  { "id": "link", "name": "Link Series", "group": "Global", "kind": "choice", "min": 0, "max": 2, "defaultValue": 0, "choices": ["Off", "Shared Phase", "Restart Together"] },
+  { "id": "link", "name": "Link", "group": "Global", "kind": "choice", "min": 0, "max": 2, "defaultValue": 0, "choices": ["Free", "Locked", "Restart"] },
   { "id": "globalRange", "name": "Global Range", "group": "Global", "kind": "int", "min": 0, "max": 100, "defaultValue": 100, "unit": "%" },
   { "id": "curve", "name": "Series Curve", "group": "Global", "kind": "choice", "min": 0, "max": 6, "defaultValue": 0, "choices": ["Linear", "Accelerating", "Decelerating", "Fibonacci", "Primes", "Random", "Custom"] },
   { "id": "pattern", "name": "Arp Pattern", "group": "Pattern", "kind": "choice", "min": 0, "max": 5, "defaultValue": 2, "choices": ["Up", "Down", "Up/Down", "Down/Up", "As Played", "Random"] },

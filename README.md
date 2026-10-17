@@ -24,12 +24,12 @@ A Logic Pro Scripter MIDI FX plugin whose parameters (Pattern, Octave Range, Sub
   - `Up` (sawtooth: min → max, then jump back to min)
   - `Down` (sawtooth: max → min, then jump back to max)
   - `Up-Down (Triangle)` (starts at base → max → min → base …)
-- **Link Series**: How active series move relative to each other:
-  - `Off` (default): each series steps one value at a time and wraps at its own length, so series of different lengths drift apart.
-  - `Shared Phase`: one shared position walks the progression shape; each series maps it onto its own range, so all reach their min, base and max together (shorter ranges hold values). E.g. velocity walking 9 steps while octave goes 1,1,1,1,1,2,2,3,3.
-  - `Restart Together`: each series steps on its own, but all restart when the longest one completes its pass.
+- **Link**: How active series move relative to each other:
+  - `Free` (default): each series steps one value at a time and wraps at its own length, so series of different lengths drift apart.
+  - `Locked`: one shared position walks the progression shape; each series maps it onto its own range, so all reach their min, base and max together (shorter ranges hold values). E.g. velocity walking 9 steps while octave goes 1,1,1,1,1,2,2,3,3.
+  - `Restart`: each series steps on its own, but all restart when the longest one completes its pass.
 - **Global Range**: A master knob (0–100%, default 100%) that scales every series' `Spread (-)` and `Spread (+)` at once, so one gesture widens or narrows the whole progression (0% = everything at its base). Pattern, octave and rate spreads round to whole steps; gate, velocity and swing keep their step count and compress the distance. Works in every Link mode.
-- **Series Curve**: The path the series take through their ranges. Steps are on a 1–8 scale (1 = each series' min, 8 = its max), scaled onto every active series' own range; all series follow the same steps together (Link Series has no effect while a curve is selected).
+- **Series Curve**: The path the series take through their ranges. Steps are on a 1–8 scale (1 = each series' min, 8 = its max), scaled onto every active series' own range; all series follow the same steps together (Link has no effect while a curve other than Linear is selected).
   - `Linear` (default): every series steps through each value of its range.
   - `Accelerating` / `Decelerating`: small steps first and big steps last, or the reverse.
   - `Fibonacci` (1, 2, 3, 5, 8) and `Primes` (2, 3, 5, 7).

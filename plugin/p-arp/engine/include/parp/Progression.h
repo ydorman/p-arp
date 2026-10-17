@@ -74,7 +74,7 @@ int seriesValueAt (SeriesId id, int pos, const Settings& s); // pattern index, o
 // Fills `out` (capacity 8) without allocating; returns the number of steps.
 int curveSteps (const Settings& s, std::array<double, maxCustomSteps>& out);
 
-// The series system: positions of all series, Link Series state and Series Curve state.
+// The series system: positions of all series, Link state and Series Curve state.
 // Real-time safe: no allocation after construction.
 class Progression
 {
@@ -105,8 +105,8 @@ public:
 private:
     void resetSeries (SeriesId id, const Settings& s);
     SeriesSet advanceIndependent (const Settings& s, bool isCycleEnd);
-    SeriesSet advanceShared (const Settings& s, bool isCycleEnd);
-    SeriesSet advanceRestartTogether (const Settings& s, bool isCycleEnd);
+    SeriesSet advanceLocked (const Settings& s, bool isCycleEnd);
+    SeriesSet advanceRestart (const Settings& s, bool isCycleEnd);
     SeriesSet advanceCurve (const Settings& s, bool isCycleEnd);
     void resetCurve (const Settings& s);
     void applyCurve (const Settings& s, bool isCycleEnd);

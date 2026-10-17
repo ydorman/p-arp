@@ -67,7 +67,7 @@ describe("parameter constants", () => {
   // when controls are inserted)
   const EXPECTED = {
     PARAM_LATCH: "Latch Chord", PARAM_ADVANCE_TRIGGER: "Advance Trigger", PARAM_PROG_SHAPE: "Progression Shape",
-    PARAM_LINK: "Link Series", PARAM_GLOBAL_RANGE: "Global Range", PARAM_CURVE: "Series Curve",
+    PARAM_LINK: "Link", PARAM_GLOBAL_RANGE: "Global Range", PARAM_CURVE: "Series Curve",
     PARAM_PATTERN: "Arp Pattern", PARAM_PAT_ACTIVE: "Pattern Mod Active",
     PARAM_PAT_SPREAD_DOWN: "Pattern Spread (-) Before", PARAM_PAT_SPREAD_UP: "Pattern Spread (+) After",
     PARAM_BASE_OCTAVE: "Base Octave Range", PARAM_OCT_ACTIVE: "Octave Mod Active",
@@ -1002,6 +1002,44 @@ describe("replay tool", () => {
     assert.match(result.out, /All notes match/);
   });
 
+  it("replays loop passes with no input in them (regression: stopped at the first wrap)", () => {
+    const held = {
+      params: SESSION.params,
+      run(host) {
+        host.setCycle(1, 5);
+        host.play(0.3);
+        [60, 64, 67].forEach((n) => host.noteOn(n, 90));
+        host.play(10); // two and a half passes of a 4-beat loop, hands off
+        host.stop();
+      },
+    };
+    const result = replay(logOf(held));
+    assert.ok(result.ok, result.out);
+    assert.match(result.out, /All notes match/);
+  });
+
+  it("replays a chord played right after a loop wrap once (input is logged before LOOP)", () => {
+    const wrapNote = {
+      params: SESSION.params,
+      run(host) {
+        host.setCycle(1, 5);
+        host.play(0.3);
+        [60, 64].forEach((n) => host.noteOn(n, 90));
+        host.play(3.7); // to the loop end
+        host.noteOff(60);
+        host.noteOff(64);
+        host.noteOn(67, 100, 1.0); // on the loop start, in the first block after the wrap
+        host.play(6);
+        host.stop();
+      },
+    };
+    const text = logOf(wrapNote);
+    assert.ok(text.indexOf("IN on G3(67)") < text.lastIndexOf("LOOP "), "IN line logged before its LOOP line");
+    const result = replay(text);
+    assert.ok(result.ok, result.out);
+    assert.match(result.out, /All notes match/);
+  });
+
   it("reports the first differing note", () => {
     const text = logOf(SESSION).replace(/OUT E3\(64\) v90 @[\d.]+/, "OUT E3(64) v90 @99.000");
     const result = replay(text);
@@ -1144,7 +1182,7 @@ describe("note bursts (regression: +10 dB pop on the second loop pass)", () => {
 });
 
 // ----------------------------------------------------------------------------
-// Link Series
+// Link
 // ----------------------------------------------------------------------------
 
 describe("link series", () => {
@@ -1169,7 +1207,7 @@ describe("link series", () => {
     assert.deepEqual(seen.map((s) => s[1]), [-4, -3, -2, -1, 0, 1, 2, 3, 4, -4]);
   });
 
-  it("Shared Phase (Up): all series hit min, base and max together", () => {
+  it("Locked (Up): all series hit min, base and max together", () => {
     const seen = walk(Object.assign({ PARAM_LINK: LINK.SHARED, PARAM_PROG_SHAPE: SHAPE.UP }, TWO_SERIES), 9);
     // velocity walks its 9 steps; octave has no range below its base, so it holds the base
     // for the lower half, then spreads its 2 steps over the upper half
@@ -1177,13 +1215,13 @@ describe("link series", () => {
     assert.deepEqual(seen.map((s) => s[0]), [1, 1, 1, 1, 1, 2, 2, 3, 3, 1]);
   });
 
-  it("Shared Phase (Up-Down): starts at every base, peaks and bottoms together", () => {
+  it("Locked (Up-Down): starts at every base, peaks and bottoms together", () => {
     const seen = walk(Object.assign({ PARAM_LINK: LINK.SHARED, PARAM_PROG_SHAPE: SHAPE.TRIANGLE }, TWO_SERIES), 16);
     assert.deepEqual(seen.map((s) => s[1]), [0, 1, 2, 3, 4, 3, 2, 1, 0, -1, -2, -3, -4, -3, -2, -1, 0]);
     assert.deepEqual(seen.map((s) => s[0]), [1, 2, 2, 3, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
   });
 
-  it("Shared Phase with equal ranges is the same as Off", () => {
+  it("Locked with equal ranges is the same as Free", () => {
     const named = { PARAM_PROG_SHAPE: SHAPE.UP, PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_DOWN: 0, PARAM_OCT_SPREAD_UP: 2,
       PARAM_BASE_OCTAVE: 1, PARAM_SUB_ACTIVE: 1, PARAM_SUB_SPREAD_DOWN: 0, PARAM_SUB_SPREAD_UP: 2 };
     const run = (link) => {
@@ -1198,7 +1236,7 @@ describe("link series", () => {
     assert.deepEqual(run(LINK.SHARED), run(LINK.OFF));
   });
 
-  it("Restart Together: shorter series repeat until the longest completes its pass", () => {
+  it("Restart: shorter series repeat until the longest completes its pass", () => {
     const named = {
       PARAM_LINK: LINK.RESTART, PARAM_PROG_SHAPE: SHAPE.UP,
       PARAM_BASE_OCTAVE: 1, PARAM_OCT_ACTIVE: 1, PARAM_OCT_SPREAD_DOWN: 0, PARAM_OCT_SPREAD_UP: 1, // 2 values
@@ -1300,7 +1338,7 @@ describe("global range", () => {
     assert.ok(host.ctx.seriesState.octave.pos >= b.minPos && host.ctx.seriesState.octave.pos <= b.maxPos);
   });
 
-  it("scales a linked (Shared Phase) progression as a whole", () => {
+  it("scales a linked (Locked) progression as a whole", () => {
     const walkOctaves = (pct) => {
       const { ctx } = arp(Object.assign({ PARAM_LINK: LINK.SHARED, PARAM_PROG_SHAPE: SHAPE.UP, PARAM_GLOBAL_RANGE: pct }, SERIES_SET));
       const out = [];

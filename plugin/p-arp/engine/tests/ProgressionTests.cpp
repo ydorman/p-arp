@@ -412,26 +412,26 @@ std::pair<Vec, Vec> walkOctaveVelocity (const Settings& s, int steps)
 
 TEST_CASE ("link Off: each series wraps at its own length")
 {
-    const auto [octave, velocity] = walkOctaveVelocity (twoSeries (LinkMode::Off, Shape::Up), 9);
+    const auto [octave, velocity] = walkOctaveVelocity (twoSeries (LinkMode::Free, Shape::Up), 9);
     CHECK_EQ (octave, (Vec { 1, 2, 3, 1, 2, 3, 1, 2, 3, 1 }));
     CHECK_EQ (velocity, (Vec { -4, -3, -2, -1, 0, 1, 2, 3, 4, -4 }));
 }
 
-TEST_CASE ("link Shared Phase (Up): all series hit min, base and max together")
+TEST_CASE ("link Locked (Up): all series hit min, base and max together")
 {
-    const auto [octave, velocity] = walkOctaveVelocity (twoSeries (LinkMode::SharedPhase, Shape::Up), 9);
+    const auto [octave, velocity] = walkOctaveVelocity (twoSeries (LinkMode::Locked, Shape::Up), 9);
     CHECK_EQ (velocity, (Vec { -4, -3, -2, -1, 0, 1, 2, 3, 4, -4 }));
     CHECK_EQ (octave, (Vec { 1, 1, 1, 1, 1, 2, 2, 3, 3, 1 }));
 }
 
-TEST_CASE ("link Shared Phase (Up-Down): starts at every base, peaks and bottoms together")
+TEST_CASE ("link Locked (Up-Down): starts at every base, peaks and bottoms together")
 {
-    const auto [octave, velocity] = walkOctaveVelocity (twoSeries (LinkMode::SharedPhase, Shape::UpDown), 16);
+    const auto [octave, velocity] = walkOctaveVelocity (twoSeries (LinkMode::Locked, Shape::UpDown), 16);
     CHECK_EQ (velocity, (Vec { 0, 1, 2, 3, 4, 3, 2, 1, 0, -1, -2, -3, -4, -3, -2, -1, 0 }));
     CHECK_EQ (octave, (Vec { 1, 2, 2, 3, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1 }));
 }
 
-TEST_CASE ("link Shared Phase with equal ranges is the same as Off")
+TEST_CASE ("link Locked with equal ranges is the same as Free")
 {
     const auto run = [] (LinkMode link) {
         Settings s;
@@ -453,13 +453,13 @@ TEST_CASE ("link Shared Phase with equal ranges is the same as Off")
         }
         return out;
     };
-    CHECK_EQ (run (LinkMode::SharedPhase), run (LinkMode::Off));
+    CHECK_EQ (run (LinkMode::Locked), run (LinkMode::Free));
 }
 
-TEST_CASE ("link Restart Together: shorter series repeat until the longest completes its pass")
+TEST_CASE ("link Restart: shorter series repeat until the longest completes its pass")
 {
     Settings s;
-    s.link = LinkMode::RestartTogether;
+    s.link = LinkMode::Restart;
     s.shape = Shape::Up;
     s.baseOctave = 1;
     s.octaveActive = true;
@@ -476,7 +476,7 @@ TEST_CASE ("link Restart Together: shorter series repeat until the longest compl
 
 TEST_CASE ("linked series report a completed pass together")
 {
-    auto s = twoSeries (LinkMode::SharedPhase, Shape::Up);
+    auto s = twoSeries (LinkMode::Locked, Shape::Up);
     s.rateActive = true;
     s.rateSpreadUp = 1;
     Fixture f (s);
@@ -489,7 +489,7 @@ TEST_CASE ("linked series report a completed pass together")
 
 TEST_CASE ("changing one series' base restarts all linked series")
 {
-    Fixture f (twoSeries (LinkMode::SharedPhase, Shape::Up));
+    Fixture f (twoSeries (LinkMode::Locked, Shape::Up));
     for (int i = 0; i < 6; ++i)
         f.advance();
     f.change ([] (Settings& x) { x.velocity = 90; });
@@ -584,11 +584,11 @@ TEST_CASE ("global range: turning the knob down mid-play pulls series back into 
     CHECK (f.pos (SeriesId::Octave) >= b.minPos && f.pos (SeriesId::Octave) <= b.maxPos);
 }
 
-TEST_CASE ("global range: scales a linked (Shared Phase) progression as a whole")
+TEST_CASE ("global range: scales a linked (Locked) progression as a whole")
 {
     const auto walk = [] (int pct) {
         auto s = globalRangeSet (pct);
-        s.link = LinkMode::SharedPhase;
+        s.link = LinkMode::Locked;
         s.shape = Shape::Up;
         Fixture f (s);
         Vec out;

@@ -9,7 +9,7 @@ namespace parp
 // Menu choices. Enumerator order = menu order in the Scripter prototype.
 enum class AdvanceTrigger { ArpCycle, NoteStep, Beat, Bar, TwoBars };
 enum class Shape { Up, Down, UpDown };
-enum class LinkMode { Off, SharedPhase, RestartTogether };
+enum class LinkMode { Free, Locked, Restart };
 enum class Curve { Linear, Accelerating, Decelerating, Fibonacci, Primes, Random, Custom };
 enum class Pattern { Up, Down, UpDown, DownUp, AsPlayed, Random };
 enum class OctaveMode { Range, Transpose };
@@ -27,7 +27,7 @@ struct Settings
     bool latch = false;
     AdvanceTrigger advanceTrigger = AdvanceTrigger::ArpCycle;
     Shape shape = Shape::Up;
-    LinkMode link = LinkMode::Off;
+    LinkMode link = LinkMode::Free;
     int globalRange = 100; // % applied to every series' spreads
     Curve curve = Curve::Linear;
 

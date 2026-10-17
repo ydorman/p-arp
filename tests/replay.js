@@ -61,10 +61,16 @@ function withoutUnit(name) {
   return name.replace(/ \(%\)$/, "").replace(" %)", ")");
 }
 
+// Logs recorded before Link Series was renamed Link (2026-10)
+const RENAMED = { "Link Series": "Link" };
+const RENAMED_VALUES = { Off: "Free", "Shared Phase": "Locked", "Restart Together": "Restart" };
+
 function parseSetting(defs, assignment) {
   const eq = assignment.lastIndexOf(" = ");
-  const name = assignment.slice(0, eq).trim();
-  const text = assignment.slice(eq + 3).replace(/\s*@.*$/, "").trim();
+  const oldName = assignment.slice(0, eq).trim();
+  const name = RENAMED[oldName] ?? oldName;
+  let text = assignment.slice(eq + 3).replace(/\s*@.*$/, "").trim();
+  if (oldName !== name) text = RENAMED_VALUES[text] ?? text;
   const index = defs.findIndex((d) => d.name === name || withoutUnit(d.name) === name);
   if (index < 0) throw new Error(`Unknown parameter "${name}"`);
   return { index, value: paramValue(defs[index], text) };
@@ -98,10 +104,12 @@ function main() {
   // Advance the transport to `beat`, playing through a cycle wrap if the beat is behind us.
   let position = startBeat;
   let started = false;
+  let unloggedWraps = 0; // wraps played for an event behind us, before their LOOP line was read
   function playTo(beat) {
     let distance = beat - position;
     if (distance < -1e-9 && cycle) {
       distance = (parseFloat(cycle[2]) - position) + (beat - parseFloat(cycle[1]));
+      unloggedWraps++;
     }
     if (!started) {
       host.play(0); // start the transport (START line) before anything else
@@ -142,6 +150,16 @@ function main() {
       playTo(beat);
       const { index, value } = parseSetting(defs, line.slice(6));
       host.setParam(index, value);
+    } else if (line.startsWith("LOOP ") && cycle) {
+      // A loop pass with no input in it leaves no other trace: play to the loop end (the mock
+      // wraps) and continue from the loop start. Scripter logs a block's input before its LOOP
+      // line, so the wrap may already have been played for an event just after it.
+      if (unloggedWraps > 0) {
+        unloggedWraps--;
+      } else {
+        playTo(parseFloat(cycle[2]));
+        position = parseFloat(cycle[1]);
+      }
     } else if (line.startsWith("STOP ")) {
       playTo(beat);
       host.stop();
