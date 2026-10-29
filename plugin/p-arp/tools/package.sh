@@ -2,8 +2,8 @@
 # Build a shareable p-arp: a universal (Apple Silicon + Intel) release for macOS 12+, zipped
 # with install notes into dist/p-arp-<version>.zip.
 #
-# Signing is ad hoc (no Apple Developer ID), so macOS quarantines the plugin when it's downloaded:
-# the install notes include the one Terminal command that clears that.
+# Signing is ad hoc (no Apple Developer ID). Logic loaded a quarantined (downloaded) copy without a
+# prompt in testing; the install notes keep the command that clears quarantine as a fallback.
 #
 # Usage: tools/package.sh   (from plugin/p-arp; run tools/import_presets.py first to update presets)
 set -euo pipefail

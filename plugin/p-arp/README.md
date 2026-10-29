@@ -58,8 +58,9 @@ tools/package.sh
 
 Builds a universal (Apple Silicon + Intel) release for macOS 12+ in `build-release/` and writes
 `dist/p-arp-<version>.zip` with `p-arp.component` and `INSTALL.txt` (from `tools/`). Signing is ad
-hoc (no Apple Developer ID), so a downloaded copy is quarantined by macOS: the install notes give
-the one `xattr` command that clears it. A Developer ID ($99/year) with notarization would remove
+hoc (no Apple Developer ID). A downloaded copy carries macOS's quarantine mark and fails a
+Gatekeeper assessment (`spctl`), but Logic loaded such a copy without a dialog (tested on macOS 26,
+2026-10); the install notes keep the `xattr` command that clears the mark as a fallback. A Developer ID ($99/year) with notarization would remove
 that step and allow a `.pkg` installer. Bump `VERSION` in `CMakeLists.txt` for each release.
 
 ## Prerequisites
