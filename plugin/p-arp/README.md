@@ -36,6 +36,32 @@ node tests/replay.js ~/Library/Logs/p-arp/debug-<date>_<time>.log
 The engine records events into a lock-free buffer on the audio thread; a message-thread timer
 formats and writes them (4 times a second). Formatting is in the engine (`EventLog`), with tests.
 
+## Factory presets
+
+Make presets in Logic (Save As in the plugin's preset menu; they're saved to
+`~/Library/Audio/Presets/p-arp/p-arp/Presets/`), then import them:
+
+```bash
+tools/import_presets.py
+```
+
+This writes `presets/<name>.xml` (one per preset, in Logic's preset menu by file name order), minus
+per-project settings (debug log, window size). Only the `Presets` folder is imported; files saved
+next to it are treated as experiments. An engine test checks every preset only sets known
+parameters within range; parameters a preset lacks load as their defaults.
+
+## Sharing a release
+
+```bash
+tools/package.sh
+```
+
+Builds a universal (Apple Silicon + Intel) release for macOS 12+ in `build-release/` and writes
+`dist/p-arp-<version>.zip` with `p-arp.component` and `INSTALL.txt` (from `tools/`). Signing is ad
+hoc (no Apple Developer ID), so a downloaded copy is quarantined by macOS: the install notes give
+the one `xattr` command that clears it. A Developer ID ($99/year) with notarization would remove
+that step and allow a `.pkg` installer. Bump `VERSION` in `CMakeLists.txt` for each release.
+
 ## Prerequisites
 
 Xcode, CMake (`brew install cmake`), Node. All commands use

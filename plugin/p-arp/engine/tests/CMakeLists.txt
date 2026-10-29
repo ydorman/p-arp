@@ -6,9 +6,11 @@ add_executable(parp_engine_tests
     SchedulerTests.cpp
     ParameterTests.cpp
     EventLogTests.cpp
-    LiveNoteTests.cpp)
+    LiveNoteTests.cpp
+    PresetTests.cpp)
 
 target_link_libraries(parp_engine_tests PRIVATE parp_engine)
+target_compile_definitions(parp_engine_tests PRIVATE PARP_PRESETS_DIR="${CMAKE_SOURCE_DIR}/presets")
 
 add_test(NAME parp_engine_tests COMMAND parp_engine_tests)
 

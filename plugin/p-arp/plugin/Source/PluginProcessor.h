@@ -31,10 +31,11 @@ public:
     bool isMidiEffect() const override { return true; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    // Factory presets (shown in Logic's preset menu)
+    int getNumPrograms() override { return juce::jmax (1, (int) factoryPresets.size()); }
+    int getCurrentProgram() override { return currentProgram; }
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
 
     void getStateInformation (juce::MemoryBlock& destData) override;
@@ -67,6 +68,15 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     parp::Transport readTransport();
     parp::Settings readSettings() const;
+
+    struct FactoryPreset
+    {
+        juce::String name;
+        juce::String xml;
+    };
+    static std::vector<FactoryPreset> loadFactoryPresets();
+    std::vector<FactoryPreset> factoryPresets = loadFactoryPresets();
+    int currentProgram = 0;
 
     parp::Engine engine;
     std::vector<std::atomic<float>*> parameterValues; // same order as parp::parameterSpecs()

@@ -1,0 +1,21 @@
+p-arp - progressive arpeggiator (Audio Unit MIDI FX for Logic Pro)
+Requires macOS 12 or later, Apple Silicon or Intel.
+Works in Logic Pro. Not in GarageBand: it has no MIDI FX slot for plugins like this one.
+
+Install
+1. Copy p-arp.component into your Components folder:
+     ~/Library/Audio/Plug-Ins/Components/
+   (In Finder: Go > Go to Folder..., paste the path above.)
+2. This build isn't signed with an Apple developer certificate, so macOS blocks it after a
+   download. Open Terminal and run this once:
+     xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/p-arp.component
+3. Restart Logic. It checks new plugins when it starts.
+
+Use
+On a software instrument track, add p-arp in the MIDI FX slot (above the instrument):
+MIDI FX > Audio Units > p-arp > p-arp. The factory presets are in the plugin's preset menu.
+
+If Logic says the plugin failed validation: Logic Pro > Settings > Plug-in Manager, select p-arp,
+click "Reset & Rescan Selection".
+
+Update: replace p-arp.component with the new one, run the command in step 2 again, restart Logic.

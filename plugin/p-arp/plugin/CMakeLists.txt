@@ -43,6 +43,11 @@ add_custom_command(
 
 juce_add_binary_data(ParpUI SOURCES "${PARP_UI_ZIP}")
 
+# Factory presets (presets/*.xml, imported from Logic by tools/import_presets.py), listed in
+# Logic's preset menu in file name order
+file(GLOB PARP_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../presets/*.xml")
+juce_add_binary_data(ParpPresets HEADER_NAME PresetData.h NAMESPACE PresetData SOURCES ${PARP_PRESET_FILES})
+
 target_sources(ParpPlugin
     PRIVATE
         Source/DebugLog.cpp
@@ -63,6 +68,7 @@ target_link_libraries(ParpPlugin
     PRIVATE
         parp_engine
         ParpUI
+        ParpPresets
         juce::juce_audio_utils
         juce::juce_gui_extra
     PUBLIC

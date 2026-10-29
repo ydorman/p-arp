@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "PresetData.h"
 
 namespace
 {
@@ -172,6 +173,51 @@ void ParpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     uiStatus.ppq.store (transport.ppqAtBlockStart, std::memory_order_relaxed);
     uiStatus.timeline.store (status.timeline, std::memory_order_relaxed);
     uiStatus.beatsPerBar.store (transport.timeSigNumerator * 4.0 / std::max (1, transport.timeSigDenominator), std::memory_order_relaxed);
+}
+
+// Factory presets embedded from presets/*.xml, in file name order
+std::vector<ParpProcessor::FactoryPreset> ParpProcessor::loadFactoryPresets()
+{
+    std::vector<FactoryPreset> presets;
+    for (int i = 0; i < PresetData::namedResourceListSize; ++i)
+    {
+        int size = 0;
+        const auto* data = PresetData::getNamedResource (PresetData::namedResourceList[i], size);
+        const juce::String file (PresetData::originalFilenames[i]);
+        if (data != nullptr && file.endsWithIgnoreCase (".xml"))
+            presets.push_back ({ file.upToLastOccurrenceOf (".", false, false), juce::String::fromUTF8 (data, size) });
+    }
+    std::sort (presets.begin(), presets.end(), [] (const auto& a, const auto& b) { return a.name < b.name; });
+    return presets;
+}
+
+const juce::String ParpProcessor::getProgramName (int index)
+{
+    return juce::isPositiveAndBelow (index, (int) factoryPresets.size()) ? factoryPresets[(size_t) index].name : juce::String();
+}
+
+// Load a factory preset: every parameter it lists, defaults for any it lacks (presets saved before
+// a parameter existed). Per-project settings (debug log, window size) are not part of presets.
+void ParpProcessor::setCurrentProgram (int index)
+{
+    if (! juce::isPositiveAndBelow (index, (int) factoryPresets.size()))
+        return;
+    currentProgram = index;
+    const auto xml = juce::parseXML (factoryPresets[(size_t) index].xml);
+    if (xml == nullptr)
+        return;
+    for (const auto& spec : parp::parameterSpecs())
+    {
+        const auto id = toString (spec.id);
+        auto* parameter = state.getParameter (id);
+        if (parameter == nullptr)
+            continue;
+        // Host values: choices are 0-based indices, everything else the value itself
+        float value = float (spec.defaultValue() - (spec.kind == parp::ParamKind::Choice ? spec.min : 0));
+        if (const auto* param = xml->getChildByAttribute ("id", id))
+            value = (float) param->getDoubleAttribute ("value", value);
+        parameter->setValueNotifyingHost (parameter->convertTo0to1 (value));
+    }
 }
 
 juce::AudioProcessorEditor* ParpProcessor::createEditor()
