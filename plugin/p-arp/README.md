@@ -63,6 +63,18 @@ Gatekeeper assessment (`spctl`), but Logic loaded such a copy without a dialog (
 2026-10); the install notes keep the `xattr` command that clears the mark as a fallback. A Developer ID ($99/year) with notarization would remove
 that step and allow a `.pkg` installer. Bump `VERSION` in `CMakeLists.txt` for each release.
 
+## User manual
+
+The manual is [docs/user-manual.md](docs/user-manual.md). After editing it, rebuild the PDF:
+
+```bash
+tools/manual_pdf.sh
+```
+
+Renders the Markdown to print-styled HTML (`tools/manual_html.js`) and prints it to
+`docs/p-arp-user-manual.pdf` with headless Google Chrome. The Markdown renderer (`marked`) is
+installed into `build-manual/` the first time.
+
 ## Prerequisites
 
 Xcode, CMake (`brew install cmake`), Node. All commands use
