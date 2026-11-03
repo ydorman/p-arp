@@ -68,7 +68,7 @@ Or start from a factory preset: open the preset menu at the top of the plugin wi
 
 ## 3. The window
 
-<!-- TODO: screenshot of the p-arp window in Logic: images/window.png -->
+![The p-arp window in Logic](images/window.png)
 
 From top to bottom:
 
