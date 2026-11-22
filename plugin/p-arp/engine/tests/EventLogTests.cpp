@@ -1,5 +1,5 @@
 // Debug log: ring buffer, line formatting (must match the Scripter prototype's [SARP] lines so
-// tests/replay.js can replay plugin logs), and what the engine records.
+// prototypes/scripter/tests/replay.js can replay plugin logs), and what the engine records.
 
 #include <memory>
 #include "HostSim.h"

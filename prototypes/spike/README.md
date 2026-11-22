@@ -1,7 +1,7 @@
 # SARP Spike
 
 Throwaway spike to de-risk the real plugin's architecture: a JUCE **AU MIDI FX** with a **web view
-UI**, loaded in Logic. It passes MIDI through unchanged. See `docs/design-notes.md` (section 4).
+UI**, loaded in Logic. It passes MIDI through unchanged. See [design notes](../../docs/design-notes.md) (section 4).
 
 - `Source/` - processor (MIDI pass-through, note counter, host transport) and editor (web view)
 - `ui/` - HTML/CSS/JS UI; one knob bound to the `testKnob` parameter via JUCE's slider relay,
@@ -14,7 +14,7 @@ Requires Xcode and CMake (`brew install cmake`). JUCE 8.0.15 is fetched into `bu
 configure. `DEVELOPER_DIR` points the build at Xcode without changing `xcode-select`.
 
 ```bash
-cd plugin/spike
+cd prototypes/spike
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake -B build -DCMAKE_BUILD_TYPE=Release
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake --build build --config Release -j 8
 ```

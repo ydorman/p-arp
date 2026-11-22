@@ -35,7 +35,7 @@ void DebugLog::timerCallback()
         const auto now = juce::Time::getCurrentTime();
         file = folder().getNonexistentChildFile ("debug-" + now.formatted ("%Y-%m-%d_%H-%M-%S"), ".log", false);
         file.appendText ("p-arp " JucePlugin_VersionString " debug log, " + now.toString (true, true) + "\n"
-                         "Replay in the Scripter prototype: node tests/replay.js \"" + file.getFullPathName() + "\"\n\n");
+                         "Replay in the Scripter prototype: node prototypes/scripter/tests/replay.js \"" + file.getFullPathName() + "\"\n\n");
     }
 
     juce::String text;

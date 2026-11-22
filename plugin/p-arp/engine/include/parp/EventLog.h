@@ -11,8 +11,8 @@ namespace parp
 // Debug log: the engine records what it does (the same events as the Scripter prototype's
 // [SARP] log) as fixed-size records. The audio thread pushes them into a lock-free ring buffer;
 // the message thread pops and formats them (formatting allocates, so it never runs on the audio
-// thread). Formatted lines match the prototype's, so tests/replay.js can replay a plugin log in
-// the prototype mock.
+// thread). Formatted lines match the prototype's, so prototypes/scripter/tests/replay.js can
+// replay a plugin log in the prototype mock.
 
 enum class LogType : std::uint8_t
 {

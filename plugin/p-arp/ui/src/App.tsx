@@ -38,7 +38,7 @@ function DebugLogSwitch() {
         on={status.debugLog}
         label="Debug log"
         onClick={() => setDebugLog(!status.debugLog)}
-        title="Write a debug log (turn on before starting the transport; replay with tests/replay.js)"
+        title="Write a debug log (turn on before starting the transport; replay with prototypes/scripter/tests/replay.js)"
       />
       <button className="debug-log-file" onClick={() => revealDebugLog?.()} title="Show in Finder">
         {file || "~/Library/Logs/p-arp"}

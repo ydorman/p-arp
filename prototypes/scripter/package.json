@@ -1,0 +1,8 @@
+{
+  "name": "sarp",
+  "private": true,
+  "description": "SARP: progressive arpeggiator prototype for Logic Pro Scripter (reference for the p-arp plugin)",
+  "scripts": {
+    "test": "node --test 'tests/*.test.js'"
+  }
+}

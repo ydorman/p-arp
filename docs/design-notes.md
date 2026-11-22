@@ -195,7 +195,7 @@ Goal: de-risk AU MIDI FX + web view in Logic before building anything else.
 
 **Result (2026-10-09):** built with JUCE 8.0.15, passed `auval`, and tested OK in Logic by the
 user (MIDI pass-through, live transport in the UI, knob/automation binding, multiple instances).
-The AU MIDI FX + web view architecture is validated. Code: `plugin/spike/`.
+The AU MIDI FX + web view architecture is validated. Code: `prototypes/spike/`.
 
 ### Real plugin project (step 1, 2026-10-10)
 
@@ -230,8 +230,8 @@ beat, so grid positions are whole samples). Differences from the prototype, all 
   and a region's notes latch again when it plays. Reported as a bug in Logic (a stopped,
   restarted transport kept playing the old latched note).
 
-**Debug log**: same line format as the prototype's `[SARP]` log, so `tests/replay.js` replays
-plugin logs in the prototype mock (the plugin drops the "%" unit from three parameter names;
+**Debug log**: same line format as the prototype's `[SARP]` log, so
+`prototypes/scripter/tests/replay.js` replays plugin logs in the prototype mock (the plugin drops the "%" unit from three parameter names;
 replay accepts both). The engine pushes POD records (`EventLog`) into a lock-free SPSC ring
 buffer (8192 records, dropped and counted when full, never blocks); a message-thread timer in
 the processor drains, formats and appends them to `~/Library/Logs/p-arp/`. Parameter changes are

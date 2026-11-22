@@ -1,12 +1,15 @@
 # SARP
 
 Progressive arpeggiator: parameters (pattern, octave, rate, gate, velocity, swing) move through
-series of values as the arp plays. Currently a Logic Pro **Scripter** prototype
-(`progressive_arp.js`); next step is a real **JUCE AU MIDI FX** plugin with a React web UI,
-user-facing name **p-arp**. `plugin/spike/` is the (validated) architecture spike.
+series of values as the arp plays. The product is **p-arp**, a **JUCE AU MIDI FX** plugin with a
+React web UI, in `plugin/p-arp/`. It was ported from the Logic Pro **Scripter** prototype (SARP),
+now kept for reference and experiments in `prototypes/scripter/`; `prototypes/spike/` is the
+(validated) architecture spike.
 
-- `Features.md` - product definition and roadmap (numbered items, ✅ = done)
-- `README.md` - user-facing feature reference, setup, debug log & replay, tests
+- `README.md` - GitHub landing page (what p-arp is, requirements, repo layout)
+- `plugin/p-arp/README.md` - plugin build, tests, debug log, presets, packaging, manual
+- `docs/Features.md` - product definition and roadmap (numbered items, ✅ = done)
+- `prototypes/scripter/README.md` - Scripter prototype feature reference, setup, debug log & replay
 - `docs/design-notes.md` - Logic host behavior, design decisions and their reasons, rejected
   options, bug lessons, and the real-plugin plan. **Read it before changing timing/scheduling code
   or starting plugin work.**
@@ -14,8 +17,8 @@ user-facing name **p-arp**. `plugin/spike/` is the (validated) architecture spik
 ## Working with the user
 
 - The user tests in Logic by ear and pastes `[SARP]` debug logs. Replay them first
-  (`pbpaste | node tests/replay.js`) to tell script bugs from expected behavior or mock gaps, and
-  explain findings with concrete note timelines (beat, pitch, rate).
+  (`pbpaste | node prototypes/scripter/tests/replay.js`) to tell script bugs from expected
+  behavior or mock gaps, and explain findings with concrete note timelines (beat, pitch, rate).
 - Ask genuine design choices as options with a recommendation; don't decide musical behavior
   silently. Flag behavior changes you make on your own initiative.
 - Commit and push only when asked; usually one commit per feature/fix. End commit messages with the
@@ -25,10 +28,10 @@ user-facing name **p-arp**. `plugin/spike/` is the (validated) architecture spik
 
 ## Conventions
 
-- `progressive_arp.js` is pasted into Scripter as one file: ES5 style (`var`, no modules), no
-  dependencies. Keep it self-contained.
-- Tests: `npm test` (Node built-in runner, no deps). `tests/scripter_mock.js` fakes Scripter and
-  simulates host playback (blocks, cycle wraps incl. straddling blocks, `beatPos`).
+- `prototypes/scripter/progressive_arp.js` is pasted into Scripter as one file: ES5 style (`var`,
+  no modules), no dependencies. Keep it self-contained.
+- Prototype tests: `npm test` in `prototypes/scripter` (Node built-in runner, no deps).
+  `tests/scripter_mock.js` fakes Scripter and simulates host playback (blocks, cycle wraps incl. straddling blocks, `beatPos`).
 - For every bug fix, add a regression test and confirm it **fails without the fix**. In the C++
   engine, force a rebuild when checking this (`cmake --build build-tests --clean-first`): an edit
   in the same second as the last build can be skipped by make, silently testing stale code.
@@ -37,4 +40,4 @@ user-facing name **p-arp**. `plugin/spike/` is the (validated) architecture spik
 - Keep the "parameter constants" test in sync when adding controls (it checks every `PARAM_`
   constant against its control name). Inserting controls shifts indices: renumber carefully
   (names can contain digits, e.g. `PARAM_CUSTOM_STEP_1`).
-- Keep README and Features.md in step with behavior changes.
+- Keep the READMEs, the user manual and `docs/Features.md` in step with behavior changes.

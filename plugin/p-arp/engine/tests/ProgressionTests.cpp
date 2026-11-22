@@ -1,5 +1,6 @@
-// Ported from the Scripter prototype's Node tests (tests/progressive_arp.test.js): same inputs,
-// same expected values. Section names follow the JS describe() blocks.
+// Ported from the Scripter prototype's Node tests
+// (prototypes/scripter/tests/progressive_arp.test.js): same inputs, same expected values. Section
+// names follow the JS describe() blocks.
 
 #include <set>
 #include "TestHarness.h"

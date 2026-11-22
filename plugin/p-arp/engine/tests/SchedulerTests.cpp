@@ -1,5 +1,6 @@
 // Scheduler tests, ported from the Scripter prototype's Node playback tests
-// (tests/progressive_arp.test.js): same scenarios and expected beats/pitches/velocities.
+// (prototypes/scripter/tests/progressive_arp.test.js): same scenarios and expected
+// beats/pitches/velocities.
 // Where the plugin legitimately differs from Scripter the test is adapted and says why.
 
 #include <random>

@@ -8,7 +8,8 @@
 // The plugin's debug log: while enabled, the engine records events into `events` (audio thread)
 // and a timer on the message thread formats them and appends them to a file in
 // ~/Library/Logs/p-arp/ (one file per time the log is switched on). Lines carry the prototype's
-// "[SARP] " prefix, so tests/replay.js can replay them in the Scripter prototype's mock.
+// "[SARP] " prefix, so prototypes/scripter/tests/replay.js can replay them in the Scripter
+// prototype's mock.
 class DebugLog : private juce::Timer
 {
 public:

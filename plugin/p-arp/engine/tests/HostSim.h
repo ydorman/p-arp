@@ -1,6 +1,7 @@
 #pragma once
 
-// Simulated plugin host for engine tests (the C++ counterpart of tests/scripter_mock.js):
+// Simulated plugin host for engine tests (the C++ counterpart of
+// prototypes/scripter/tests/scripter_mock.js):
 // runs the engine block by block, delivers notes at beat positions, loops (optionally with blocks
 // straddling the loop end), and records every output event with its beat and loop pass.
 //

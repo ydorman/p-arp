@@ -1,7 +1,7 @@
 # p-arp (plugin)
 
 The real p-arp plugin: a JUCE **AU MIDI FX** for Logic with a React web UI. The arp engine is
-being ported from the Scripter prototype (`progressive_arp.js`); see `docs/design-notes.md`.
+being ported from the Scripter prototype ([`prototypes/scripter`](../../prototypes/scripter)); see [design notes](../../docs/design-notes.md).
 
 ```
 engine/   pure C++20 arp engine, no JUCE dependency (+ unit tests)
@@ -30,7 +30,7 @@ file name to show it in Finder). Turn it on *before* starting the transport, the
 in the prototype's mock to compare the plugin's notes with the prototype's:
 
 ```bash
-node tests/replay.js ~/Library/Logs/p-arp/debug-<date>_<time>.log
+node prototypes/scripter/tests/replay.js ~/Library/Logs/p-arp/debug-<date>_<time>.log
 ```
 
 The engine records events into a lock-free buffer on the audio thread; a message-thread timer
