@@ -355,8 +355,13 @@ steps; Gate, Velocity and Swing keep their step count and compress the distance.
   the pattern, so the loop plays identically every time, including its first note.
 - **Notes land on the grid.** The first note of a chord starts on the next grid line of the current
   rate. A chord played just after a grid line (within a 1/64 note) still starts on that line.
-- **No stuck notes.** Sounding notes are stopped when the loop wraps, the playhead jumps, the
-  transport stops, or you release the chord (without Latch).
+- **Letting go stops the arp, not the note.** When you release the chord (without Latch), no new
+  notes start, and the note that is sounding finishes its normal length, as on most arpeggiators.
+- **Chords ending on the grid.** A chord released or changed exactly on a grid line plays no
+  note of the old chord there.
+- **No stuck notes.** Sounding notes are stopped at once when the loop wraps, the playhead jumps or
+  the transport stops. A note never overlaps another note of the same pitch: the new one ends the
+  old one.
 
 ### When the rate changes: Snap, Flow, Free
 

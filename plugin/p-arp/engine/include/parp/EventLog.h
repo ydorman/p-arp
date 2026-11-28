@@ -33,6 +33,7 @@ enum class LogType : std::uint8_t
     Skip,       // note skipped: it would start at or past the loop end
     Behind,     // safety net: schedule behind the segment, resynced (from)
     Flush,      // immediate note-off for a sounding note (pitch)
+    Off,        // scheduled note-off: a note's gate ended (pitch)
 };
 
 struct LogRecord
@@ -56,6 +57,12 @@ struct LogRecord
     double value2 = 0.0;       // Align: grid; Start: loop start
     double value3 = 0.0;       // Start: loop end
     double beatsPerBar = 4.0;  // for bar|beat display
+    // Exact timing (IN, OUT, OFF, FLUSH): the unrounded beat and the sample it was sent at in its
+    // block, appended as " {beat smp offset/blockSize}" (sample = -1: none). The log's @ beats are
+    // rounded to 1/1000 beat (~30 samples), too coarse for events on the same grid line.
+    double exactBeat = 0.0;
+    std::int32_t sample = -1;
+    std::int32_t blockSamples = 0;
 };
 
 // Debug log records, pushed by the audio thread and popped by the message thread

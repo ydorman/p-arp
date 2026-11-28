@@ -48,7 +48,7 @@ public:
 
     struct NoteOffResult
     {
-        bool stopSounding = false;    // not latched and every key released: stop sounding notes now
+        bool chordReleased = false;   // not latched and every key released: the arp stops (sounding notes finish)
         bool sequenceChanged = false; // not latched: the active notes changed
     };
 

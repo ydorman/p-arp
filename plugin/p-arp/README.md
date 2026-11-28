@@ -39,6 +39,12 @@ in the prototype's mock to compare the plugin's notes with the prototype's:
 node prototypes/scripter/tests/replay.js ~/Library/Logs/p-arp/debug-<date>_<time>.log
 ```
 
+The plugin log has more than the prototype's: `OFF` lines for scheduled note-offs, and on `IN`,
+`OUT`, `OFF` and `FLUSH` lines a suffix with the exact timing, `{12.00000042 smp 341/512}` (the
+unrounded beat, and the sample it was sent at in its block of 512). The `@` beats are rounded to
+1/1000 beat (~30 samples), too coarse to tell which comes first on one grid line. Replay ignores
+both.
+
 The engine records events into a lock-free buffer on the audio thread; a message-thread timer
 formats and writes them (4 times a second). Formatting is in the engine (`EventLog`), with tests.
 

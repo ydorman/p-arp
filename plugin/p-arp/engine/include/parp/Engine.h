@@ -110,6 +110,8 @@ public:
     static constexpr int maxEventsPerBlock = 512;
 
     // A chord played up to this late after a grid line still starts on that line (1/64 note)
+    // An incoming event applies before notes up to this many samples before it (see process)
+    static constexpr double eventLeadSamples = 3.0;
     static constexpr double chordLateTolerance = 0.0625;
 
     // Beats closer than this to a block / segment end belong to the next one (floating-point
@@ -124,6 +126,7 @@ private:
         double beat = 0.0;
         int pitch = 0;
         int channel = 1;
+        double onBeat = 0.0; // when the note started
     };
 
     // Block context (beats)
@@ -143,6 +146,9 @@ private:
     void scheduleSegment (const Block& block, double segmentStart, double segmentEnd, std::vector<MidiEvent>& out);
     void flushDueOffs (const Block& block, double before, std::vector<MidiEvent>& out);
     void stopAllSoundingNotes (int offset, std::vector<MidiEvent>& out);
+    bool startsWithSamePitch (const Block& block, int pitch, int offset) const;
+    void endSoundingPitch (const Block& block, int pitch, int offset, std::vector<MidiEvent>& out);
+    void logTiming (LogRecord& record, double exactBeat, int offset) const;
     void rebuildSequence();
     void restartAtTransportStart (double fromBeat);
     void alignSchedule (double beat, double gridLength, double stepDuration);
@@ -178,6 +184,7 @@ private:
     EventLog* eventLog = nullptr;
     LiveNoteRing* liveNotes = nullptr;
     double timelineAtBlockStart = 0.0;
+    Block currentBlock; // the block being processed (for exact debug log timing)
     Settings loggedSettings; // settings as of the last START / PARAM lines
 };
 

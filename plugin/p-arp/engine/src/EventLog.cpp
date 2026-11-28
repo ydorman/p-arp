@@ -99,6 +99,7 @@ void LogFormatter::add (const LogRecord& r, std::vector<std::string>& lines)
     finish (lines);
 
     const auto at = formatBeat (r.beat, r.beatsPerBar);
+    const std::string exact = r.sample >= 0 ? " {" + fixed (r.exactBeat, 8) + " smp " + std::to_string (r.sample) + "/" + std::to_string (r.blockSamples) + "}" : std::string();
     switch (r.type)
     {
         case LogType::Set:
@@ -126,10 +127,10 @@ void LogFormatter::add (const LogRecord& r, std::vector<std::string>& lines)
             break;
         }
         case LogType::NoteIn:
-            lines.push_back ("IN on " + noteName (r.pitch) + " v" + std::to_string (r.velocity) + " " + at);
+            lines.push_back ("IN on " + noteName (r.pitch) + " v" + std::to_string (r.velocity) + " " + at + exact);
             break;
         case LogType::NoteInOff:
-            lines.push_back ("IN off " + noteName (r.pitch) + " " + at);
+            lines.push_back ("IN off " + noteName (r.pitch) + " " + at + exact);
             break;
         case LogType::NewChord:
             lines.push_back ("CHORD new chord: series and pattern restart");
@@ -152,13 +153,16 @@ void LogFormatter::add (const LogRecord& r, std::vector<std::string>& lines)
                              + std::to_string (r.velocity) + " " + at + " len " + fixed (r.value1, 3)
                              + " | rate " + rateName (r.rate) + " oct " + std::to_string (r.octave) + " pat " + patternName (r.pattern)
                              + " gate " + std::to_string (r.gate) + "% swing " + std::to_string (r.swing) + "%"
-                             + " | step " + std::to_string (r.step) + "/" + std::to_string (r.stepCount));
+                             + " | step " + std::to_string (r.step) + "/" + std::to_string (r.stepCount) + exact);
             break;
         case LogType::Behind:
             lines.push_back ("ALIGN behind " + fixed (r.value1, 3) + " -> resync from " + at);
             break;
         case LogType::Flush:
-            lines.push_back ("FLUSH immediate NoteOff " + noteName (r.pitch));
+            lines.push_back ("FLUSH immediate NoteOff " + noteName (r.pitch) + exact);
+            break;
+        case LogType::Off:
+            lines.push_back ("OFF " + noteName (r.pitch) + " " + at + exact);
             break;
     }
 }

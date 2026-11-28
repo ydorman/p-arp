@@ -167,7 +167,14 @@ void Engine::flushDueOffs (const Block& block, double before, std::vector<MidiEv
     {
         if (pendingOffs[i].beat < before - beatEpsilon)
         {
-            emit (out, MidiEvent::Type::NoteOff, toOffset (block, pendingOffs[i].beat), pendingOffs[i].pitch, 64, pendingOffs[i].channel);
+            const int offset = toOffset (block, pendingOffs[i].beat);
+            emit (out, MidiEvent::Type::NoteOff, offset, pendingOffs[i].pitch, 64, pendingOffs[i].channel);
+            if (eventLog != nullptr)
+            {
+                LogRecord record { .type = LogType::Off, .pitch = std::int16_t (pendingOffs[i].pitch), .beat = pendingOffs[i].beat };
+                logTiming (record, pendingOffs[i].beat, offset);
+                logEvent (record);
+            }
             pendingOffs.erase (i);
         }
         else
@@ -175,6 +182,45 @@ void Engine::flushDueOffs (const Block& block, double before, std::vector<MidiEv
             ++i;
         }
     }
+}
+
+bool Engine::startsWithSamePitch (const Block& block, int pitch, int offset) const
+{
+    for (const auto& p : pendingOffs)
+        if (p.pitch == pitch && p.onBeat >= block.start - beatEpsilon && toOffset (block, p.onBeat) == offset)
+            return true;
+    return false;
+}
+
+// A new note of a pitch that is still sounding ends the old note first (at the same sample; the
+// output sort puts note-offs first). Otherwise the old note's note-off would cut the new note
+// and the new note's note-off would find nothing to end (a stuck voice on some instruments).
+void Engine::endSoundingPitch (const Block& block, int pitch, int offset, std::vector<MidiEvent>& out)
+{
+    for (std::size_t i = 0; i < pendingOffs.size();)
+    {
+        if (pendingOffs[i].pitch != pitch)
+        {
+            ++i;
+            continue;
+        }
+        emit (out, MidiEvent::Type::NoteOff, offset, pitch, 64, pendingOffs[i].channel);
+        if (eventLog != nullptr)
+        {
+            const double beat = block.start + double (offset) / block.samplesPerBeat;
+            LogRecord record { .type = LogType::Off, .pitch = std::int16_t (pitch), .beat = beat };
+            logTiming (record, beat, offset);
+            logEvent (record);
+        }
+        pendingOffs.erase (i);
+    }
+}
+
+void Engine::logTiming (LogRecord& record, double exactBeat, int offset) const
+{
+    record.exactBeat = exactBeat;
+    record.sample = offset;
+    record.blockSamples = currentBlock.numSamples;
 }
 
 void Engine::stopAllSoundingNotes (int offset, std::vector<MidiEvent>& out)
@@ -191,6 +237,7 @@ void Engine::stopAllSoundingNotes (int offset, std::vector<MidiEvent>& out)
             LogRecord record;
             record.type = LogType::Flush;
             record.pitch = std::int16_t (pendingOffs[i].pitch);
+            logTiming (record, currentBlock.start + double (offset) / std::max (1.0, currentBlock.samplesPerBeat), offset);
             logEvent (record);
         }
     }
@@ -222,9 +269,11 @@ void Engine::handleNoteOn (int pitch, int velocity, double beat, int offset, std
 
 void Engine::handleNoteOff (int pitch, int offset, std::vector<MidiEvent>& out)
 {
+    // Releasing the whole chord stops the arp: no new notes, but a note still sounding finishes its
+    // gate (like most arps; an instrument with an abrupt release made the cut audible)
+    (void) offset;
+    (void) out;
     const auto result = chords.noteOff (pitch, currentSettings.latch);
-    if (result.stopSounding)
-        stopAllSoundingNotes (offset, out); // releasing the whole chord stops the arp at once
     if (result.sequenceChanged)
         rebuildSequence();
 }
@@ -246,6 +295,7 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
     if (transport.timeSigNumerator > 0 && transport.timeSigDenominator > 0)
         beatsPerBar = transport.timeSigNumerator * 4.0 / transport.timeSigDenominator;
 
+    currentBlock = block;
     const auto beatAt = [&block] (int offset) { return block.start + double (offset) / block.samplesPerBeat; };
     const auto applyInput = [&] (const MidiEvent& event) {
         const bool isOn = event.type == MidiEvent::Type::NoteOn && event.velocity > 0;
@@ -256,6 +306,7 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
         record.pitch = std::int16_t (event.note);
         record.velocity = std::int16_t (event.velocity);
         record.beat = beatAt (event.sampleOffset);
+        logTiming (record, record.beat, event.sampleOffset);
         logEvent (record);
         if (isOn)
             handleNoteOn (event.note, event.velocity, record.beat, event.sampleOffset, out);
@@ -342,16 +393,23 @@ void Engine::process (const Transport& transport, int numSamples, std::span<cons
         }
     }
 
-    // 5. Schedule in segments split at each incoming event, applying the event in between
+    // 5. Schedule in segments split at each incoming event, applying the event in between. An
+    // event applies before any note up to eventLeadSamples before it: Logic sends an event on a
+    // grid line up to ~2 samples after that line (by our reading of the block position), and a
+    // chord released or changed exactly on a beat must not play the old chord's note there. Such
+    // a note is played after the event instead, at most eventLeadSamples late (62 us at 48 kHz).
+    const double lead = (eventLeadSamples + 0.5) / block.samplesPerBeat; // + 0.5: notes round to the nearest sample
     double segmentStart = block.start;
     for (const auto& event : in)
     {
         const double eventBeat = beatAt (event.sampleOffset);
-        scheduleSegment (block, segmentStart, eventBeat, out);
+        scheduleSegment (block, segmentStart, eventBeat - lead, out);
         applyInput (event);
         segmentStart = std::max (segmentStart, eventBeat);
     }
-    scheduleSegment (block, segmentStart, block.end, out);
+    // Likewise a note in the last samples of the block waits for the next block's events (it is
+    // played at the next block's start, unless an event there releases the chord)
+    scheduleSegment (block, segmentStart, block.end - lead, out);
     flushDueOffs (block, block.end, out);
 
     // Sort this block's output by sample; at the same sample, note-offs before note-ons (a note
@@ -480,13 +538,18 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
         noteOffBeat = std::max (noteOffBeat, noteOnBeat + 1.0 / block.samplesPerBeat); // at least 1 sample
 
         // F. Emit the note-on now, queue the note-off
-        if (playNote)
+        const int noteOnOffset = toOffset (block, noteOnBeat);
+        // The same pitch already starting on this sample (a chord on a bar line at a very fast rate
+        // can reach one sample twice): one note, not two
+        const bool duplicate = playNote && startsWithSamePitch (block, note.pitch, noteOnOffset);
+        if (playNote && ! duplicate)
         {
-            emit (out, MidiEvent::Type::NoteOn, toOffset (block, noteOnBeat), note.pitch, finalVelocity);
-            pendingOffs.push_back ({ noteOffBeat, note.pitch, 1 });
+            endSoundingPitch (block, note.pitch, noteOnOffset, out); // never two notes of one pitch at once
+            emit (out, MidiEvent::Type::NoteOn, noteOnOffset, note.pitch, finalVelocity);
+            pendingOffs.push_back ({ noteOffBeat, note.pitch, 1, noteOnBeat });
             ++currentStatus.noteOnsOut;
         }
-        if (liveNotes != nullptr && playNote)
+        if (liveNotes != nullptr && playNote && ! duplicate)
         {
             LiveNote live;
             live.time = timelineAtBlockStart + (noteOnBeat - block.start);
@@ -503,6 +566,7 @@ void Engine::scheduleSegment (const Block& block, double segmentStart, double se
             record.pitch = note.pitch;
             record.velocity = std::int16_t (finalVelocity);
             record.beat = noteOnBeat;
+            logTiming (record, noteOnBeat, noteOnOffset);
             record.value1 = noteOffBeat - noteOnBeat;
             record.rate = std::int16_t (progression.value (SeriesId::Rate, s));
             record.octave = std::int16_t (progression.value (SeriesId::Octave, s));

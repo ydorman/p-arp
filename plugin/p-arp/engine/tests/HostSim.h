@@ -177,7 +177,7 @@ private:
         parp::Transport transport;
         transport.playing = playing;
         transport.bpm = bpm;
-        transport.ppqAtBlockStart = double (positionSamples) / samplesPerBeat;
+        transport.ppqAtBlockStart = (double (positionSamples) + subSample) / samplesPerBeat;
         transport.looping = cycling;
         transport.loopStartPpq = leftBeat - 1.0;
         transport.loopEndPpq = rightBeat - 1.0;
@@ -187,7 +187,7 @@ private:
         std::vector<parp::MidiEvent> in;
         for (auto it = pending.begin(); it != pending.end();)
         {
-            const long long at = beatToSamples (it->beat);
+            const long long at = std::llround ((it->beat - 1.0) * samplesPerBeat - subSample + eventLateSamples); // nearest sample
             if (at < blockEnd)
             {
                 parp::MidiEvent e;
@@ -206,7 +206,7 @@ private:
         out.clear();
         engine.process (transport, numSamples, in, out);
         for (const auto& e : out)
-            events.push_back ({ e.type, 1.0 + double (positionSamples + e.sampleOffset) / samplesPerBeat, e.note, e.velocity, pass });
+            events.push_back ({ e.type, 1.0 + (double (positionSamples + e.sampleOffset) + subSample) / samplesPerBeat, e.note, e.velocity, pass });
 
         if (playing)
             positionSamples += numSamples;
@@ -221,6 +221,14 @@ private:
     double leftBeat = 1.0;
     double rightBeat = 5.0;
     int pass = 0;
+
+public:
+    // Logic's block positions don't fall on whole samples of the beat grid: offset every block
+    // start by this fraction of a sample (grid lines then fall between samples)
+    double subSample = 0.0;
+    // Logic sends events on a grid line up to ~2 samples after it (seen: 0.4 - 1.8 samples at
+    // 48 kHz): delay every incoming event by this many samples
+    double eventLateSamples = 0.0;
 };
 
 inline std::vector<double> beatsOf (const std::vector<OutNote>& notes)

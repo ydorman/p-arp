@@ -3,9 +3,11 @@
 // beats/pitches/velocities.
 // Where the plugin legitimately differs from Scripter the test is adapted and says why.
 
+#include <algorithm>
 #include <random>
 #include <set>
 #include "HostSim.h"
+#include "parp/Parameters.h"
 #include "TestHarness.h"
 
 using namespace parp;
@@ -100,7 +102,7 @@ TEST_CASE ("playback: produces nothing with no notes held")
     CHECK_EQ (host.events.size(), size_t (0));
 }
 
-TEST_CASE ("playback: releasing the chord stops sounding notes immediately")
+TEST_CASE ("playback: releasing the chord stops the arp; the sounding note finishes its gate")
 {
     HostSim host (plain());
     host.noteOn (60);
@@ -109,8 +111,76 @@ TEST_CASE ("playback: releasing the chord stops sounding notes immediately")
     host.play (2);
     const auto offs = host.noteOffs();
     REQUIRE_EQ (offs.size(), size_t (1));
-    CHECK (offs[0].beat < 1.4); // immediate, not the scheduled one
+    CHECK (std::abs (offs[0].beat - 1.4) < 1e-6); // its own gate, not cut at the release
     CHECK_EQ (host.noteOns().size(), size_t (1)); // no new notes after release
+}
+
+TEST_CASE ("playback: a note of a pitch still sounding ends the old note first")
+{
+    // C3 at 1.0 rings until 1.5 (gate 100%). Released at 1.01 and pressed again at 1.03, within
+    // the late-chord tolerance, so the new C3 starts at once while the old one is still sounding.
+    HostSim host (plainWith ([] (Settings& s) { s.gate = 100; }));
+    host.noteOnAt (60, 100, 1.0);
+    host.noteOffAt (60, 1.01);
+    host.noteOnAt (60, 90, 1.03);
+    host.play (1.2);
+    const auto ons = host.noteOns();
+    REQUIRE (ons.size() >= 2);
+    CHECK (ons[1].beat < 1.1); // the new C3 started while the old one rang
+    std::vector<OutNote> unmatched;
+    const auto pairs = host.pairs (&unmatched);
+    CHECK_EQ (unmatched.size(), size_t (1)); // only the last note, still sounding
+    for (size_t i = 1; i < pairs.size(); ++i)
+        CHECK (pairs[i].on >= pairs[i - 1].off - 1e-9); // never two C3s at once
+}
+
+// Reported in Logic (90 BPM, chord released exactly on a beat): the release landed on the same
+// sample as that beat's note, which was played anyway and flushed at that sample. The flush was
+// sorted before the note-on, leaving the note stuck. The prototype plays no note there.
+TEST_CASE ("playback: a chord released exactly on a grid line plays no note there (no stuck note)")
+{
+    // Reported again (90 BPM, 48 kHz): Logic sent the release ~1 sample after the beat's note, which
+    // then played in full after the chord ended
+    for (const double late : { 0.0, 1.0, 1.8, 3.0 })
+    for (const double subSample : { 0.0, 0.3, 0.7 })
+    {
+        HostSim host (plainWith ([] (Settings& s) { s.baseRate = rateIndex ("1/16"); }));
+        host.subSample = subSample;
+        host.eventLateSamples = late;
+        for (const int pitch : { 55, 60, 64 })
+        {
+            host.noteOnAt (pitch, 100, 1.0);
+            host.noteOffAt (pitch, 2.0);
+        }
+        host.play (3);
+        for (const auto& on : host.noteOns())
+            CHECK (on.beat < 2.0 - 1e-3);
+        CHECK_EQ (host.noteOns().size(), size_t (4)); // 1.0, 1.25, 1.5, 1.75
+        std::vector<OutNote> unmatched;
+        host.pairs (&unmatched);
+        CHECK_EQ (unmatched.size(), size_t (0));
+    }
+}
+
+TEST_CASE ("playback: a chord changed exactly on a grid line plays the new chord there")
+{
+    for (const double late : { 0.0, 1.8 })
+    {
+    HostSim host (plainWith ([] (Settings& s) { s.baseRate = rateIndex ("1/16"); }));
+    host.subSample = 0.7;
+    host.eventLateSamples = late;
+    host.noteOnAt (60, 100, 1.0);
+    host.noteOffAt (60, 2.0);
+    host.noteOnAt (67, 100, 2.0);
+    host.play (1.05);
+    const auto ons = host.noteOns();
+    REQUIRE_EQ (ons.size(), size_t (5));
+    CHECK_EQ (ons[4].pitch, 67);
+    CHECK (std::abs (ons[4].beat - 2.0) < 1e-3);
+    std::vector<OutNote> unmatched;
+    host.pairs (&unmatched);
+    CHECK_EQ (unmatched.size(), size_t (1)); // only the new chord's note, still sounding
+    }
 }
 
 TEST_CASE ("playback: stopping the transport only sends note-offs for notes still sounding")
@@ -191,6 +261,53 @@ TEST_CASE ("playback: leaves no stuck notes across modulated settings")
         host.pairs (&unmatched);
         CHECK_EQ (unmatched.size(), size_t (0));
     }
+}
+
+// Randomized: every setting at random, chords starting and ending on 1/16 grid lines, blocks off the
+// sample grid and events up to 2 samples after their grid line (as in Logic). Caught: notes on a release beat (released on the beat's sample), a
+// note stuck behind its own flush, and a duplicate same-pitch note on one sample left without a
+// note-off once a new note ends the old one of its pitch.
+TEST_CASE ("playback: random settings with chords on grid lines leave no stuck notes")
+{
+    Random r (777);
+    int stuck = 0, onRelease = 0;
+    for (int run = 0; run < 600; ++run)
+    {
+        Settings s;
+        for (const auto& spec : parameterSpecs())
+            spec.set (s, spec.min + r.nextInt (spec.max - spec.min + 1));
+        s.latch = false;
+        HostSim host (s, (std::uint64_t) run + 1);
+        host.subSample = r.next();
+        host.eventLateSamples = 2.0 * r.next();
+        double t = 1.0;
+        std::vector<double> starts, ends;
+        for (int c = 0; c < 6; ++c)
+        {
+            const double length = 0.25 * (1 + r.nextInt (8));
+            const int notes = 1 + r.nextInt (4);
+            for (int i = 0; i < notes; ++i)
+            {
+                const int pitch = 48 + r.nextInt (24);
+                host.noteOnAt (pitch, 100, t);
+                host.noteOffAt (pitch, t + length);
+            }
+            starts.push_back (t);
+            ends.push_back (t + length);
+            t += length + 0.25 * r.nextInt (4);
+        }
+        host.play (t, 128 + 128 * r.nextInt (4));
+        host.stop();
+        std::vector<OutNote> unmatched;
+        host.pairs (&unmatched);
+        stuck += unmatched.empty() ? 0 : 1;
+        for (const auto& on : host.noteOns())
+            for (const double end : ends)
+                if (std::abs (on.beat - end) < 1e-4 && std::none_of (starts.begin(), starts.end(), [&] (double st) { return std::abs (st - end) < 1e-4; }))
+                    ++onRelease;
+    }
+    CHECK_EQ (stuck, 0);
+    CHECK_EQ (onRelease, 0);
 }
 
 TEST_CASE ("playback: at the same sample a note-off comes before the next note-on")

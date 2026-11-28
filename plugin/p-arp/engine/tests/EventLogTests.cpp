@@ -78,6 +78,19 @@ TEST_CASE ("event log: record lines")
     CHECK_EQ (lines[6], std::string ("PARAM Arp Pattern = Down @3.000 [1|3.000]"));
 }
 
+TEST_CASE ("event log: exact timing suffix and scheduled note-offs")
+{
+    LogFormatter formatter;
+    std::vector<std::string> lines;
+    formatter.add ({ .type = LogType::NoteInOff, .pitch = 60, .beat = 12.0000004, .exactBeat = 12.0000004, .sample = 341, .blockSamples = 512 }, lines);
+    formatter.add ({ .type = LogType::Off, .pitch = 55, .beat = 9.947, .exactBeat = 9.9475, .sample = 0, .blockSamples = 512 }, lines);
+    formatter.add ({ .type = LogType::Flush, .pitch = 64 }, lines);
+    REQUIRE (lines.size() == 3);
+    CHECK_EQ (lines[0], std::string ("IN off C3(60) @12.000 [3|4.000] {12.00000040 smp 341/512}"));
+    CHECK_EQ (lines[1], std::string ("OFF G2(55) @9.947 [3|1.947] {9.94750000 smp 0/512}"));
+    CHECK_EQ (lines[2], std::string ("FLUSH immediate NoteOff E3(64)")); // no timing recorded: no suffix
+}
+
 TEST_CASE ("event log: Set records become one SET line per parameter group")
 {
     Settings s;

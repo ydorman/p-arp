@@ -87,6 +87,9 @@ These apply to the real plugin too (AU MIDI FX gets the same transport and event
 - Loop downbeat lost when blocks straddle the loop end -> align from the left locator when close.
 - Parameter index slip when inserting controls (regex skipped a name with a digit) -> test that
   every `PARAM_` constant points at the control with its name.
+- Stuck note / zero-length note when a chord is released exactly on a grid line (plugin) -> an
+  incoming event applies before notes on its own sample; test hosts must not keep every grid
+  line on a whole sample (Logic doesn't).
 - Randomized stress test (60 sessions, all modes) caught two of the above; keep extending it.
 
 ## 4. Real plugin plan
@@ -221,10 +224,33 @@ beat, so grid positions are whole samples). Differences from the prototype, all 
   is at least 1 sample long.
 - **Boundary tolerance** (`beatEpsilon`): a note exactly on a block boundary belongs to the next
   block (floating-point slack made timing depend on block size by 1 sample).
+- **Half-sample boundaries**: a segment (before an incoming event, or the block end) only plays
+  notes that round to an earlier sample. In Logic grid lines fall between samples, so a chord
+  released exactly on a beat arrived on the same sample as that beat's note: the note played and
+  was flushed at that sample, the sort put the flush first, and the note stuck (reported
+  2026-11-28; the prototype, which applies input first, played no note there). A note rounding
+  to the next block's first sample was also clamped into this block, a sample early, ahead of a
+  release in the next block. Tests: `HostSim::subSample` offsets blocks off the sample grid.
+- **Events lead notes by 3 samples** (`eventLeadSamples`, extends the half-sample rule): Logic
+  sends an event on a grid line up to ~2 samples *after* that line as computed from the block's
+  ppq (logged 2026-11-28, 90 BPM, 48 kHz: 0.4 - 1.8 samples late). A release on beat 12 arrived
+  one sample after the beat's note, so that note played in full after the chord ended. So an
+  event applies before any note up to 3 samples before it, and a note in a block's last 3
+  samples waits for the next block's events; such a note plays at most 3 samples (62 us) late.
+  Tests: `HostSim::eventLateSamples`.
 - **Late-note resync fix**: after a late (immediately played) note, the schedule resyncs to a grid
   line *after* it. At rates faster than the 1/16-beat chord tolerance (1/64, 1/128) a chord
   exactly on a grid line otherwise played two notes at the same instant. The Scripter prototype
   has the same latent flaw (rarely triggered there because its chords arrived off-grid).
+
+- **Releasing the chord lets the sounding note finish its gate** (the prototype, and the plugin
+  until 2026-11-28, cut it at once). Most arps do this; an instrument with an abrupt release made
+  the cut audible. No new notes start after the release. Stop, loop wraps and jumps still cut.
+- **One note per pitch at a time**: a new note of a pitch still sounding ends the old one at the
+  same sample (otherwise the old note-off cuts the new note and the new note-off ends nothing),
+  and a second note of one pitch on the very same sample is dropped (a chord on a bar line at a
+  very fast rate could start its first note twice). Both happen more often now that released
+  notes ring out. Randomized test: chords on grid lines with blocks off the sample grid.
 
 - **Transport stop releases a latched chord** (the prototype keeps it): each play starts fresh,
   and a region's notes latch again when it plays. Reported as a bug in Logic (a stopped,

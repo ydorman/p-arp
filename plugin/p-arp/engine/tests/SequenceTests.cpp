@@ -159,7 +159,7 @@ TEST_CASE ("latch: releasing keys keeps the latched chord playing")
     ChordTracker chords;
     chords.noteOn (60, 100, true);
     const auto off = chords.noteOff (60, true);
-    CHECK (! off.stopSounding);
+    CHECK (! off.chordReleased);
     CHECK (! off.sequenceChanged);
     CHECK_EQ (pitches (chords.active (true)), (Vec { 60 }));
 }
@@ -169,8 +169,8 @@ TEST_CASE ("chords: a new chord is detected only after all keys are released")
     ChordTracker chords;
     CHECK (chords.noteOn (60, 100, false).newChord);
     CHECK (! chords.noteOn (64, 100, false).newChord); // added to the held chord
-    CHECK (! chords.noteOff (60, false).stopSounding);
-    CHECK (chords.noteOff (64, false).stopSounding); // whole chord released
+    CHECK (! chords.noteOff (60, false).chordReleased);
+    CHECK (chords.noteOff (64, false).chordReleased); // whole chord released
     CHECK (chords.noteOn (62, 100, false).newChord);
 }
 

@@ -171,7 +171,8 @@ function main() {
   // Compare generated notes. With humanize on, velocity and length are random, so compare
   // pitch, onset, rate and step only.
   const normalize = (l) => {
-    let out = l.replace(/^SKIP \(past loop end\) /, "SKIP ");
+    // Plugin logs end note lines with exact timing (" {beat smp offset/size}"): not in the mock
+    let out = l.replace(/^SKIP \(past loop end\) /, "SKIP ").replace(/ \{[^}]*\}$/, "");
     if (humanized) out = out.replace(/ v\d+/, "").replace(/ len [\d.]+/, "").replace(/ gate \d+%/, "");
     return out;
   };

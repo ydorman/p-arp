@@ -119,7 +119,7 @@ ChordTracker::NoteOffResult ChordTracker::noteOff (int pitch, bool latch)
     NoteOffResult result;
     if (! latch)
     {
-        result.stopSounding = heldNotes.empty(); // releasing the whole chord stops the arp at once
+        result.chordReleased = heldNotes.empty();
         result.sequenceChanged = true;
     }
     return result;
