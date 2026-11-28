@@ -63,3 +63,29 @@ export function PatternIcon({ pattern, size = 18 }: { pattern: number; size?: nu
     </svg>
   );
 }
+
+// Progression shape diagrams: value (low = bottom) over time, with a dot where the shape starts
+const SHAPE_PATHS: { points: [number, number][]; random?: boolean }[] = [
+  { points: [[3, 15], [23, 3], [23, 15]] }, // Up: rise, jump back
+  { points: [[3, 3], [23, 15], [23, 3]] }, // Down: fall, jump back
+  { points: [[3, 9], [9, 3], [21, 15], [27, 9]] }, // Up-Down: from the base
+  { points: [[3, 9], [9, 15], [21, 3], [27, 9]] }, // Down-Up: from the base
+  { points: [[3, 15], [15, 3], [27, 15]] }, // Triangle: from min
+  { points: [[3, 9], [9, 4], [15, 14], [21, 6], [27, 12]], random: true }, // Random: from the base
+];
+
+export function ShapeIcon({ shape, size = 18 }: { shape: number; size?: number }) {
+  const { points, random } = SHAPE_PATHS[shape] ?? SHAPE_PATHS[0];
+  const [startX, startY] = points[0];
+  return (
+    <svg viewBox="0 0 30 18" width={size * (30 / 18)} height={size} className="shape-icon" aria-hidden>
+      {random ? (
+        points.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={1.6} fill="currentColor" opacity={i === 0 ? 1 : 0.7} />)
+      ) : (
+        <polyline points={points.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
+      )}
+      <circle cx={startX} cy={startY} r={2.2} fill="currentColor" />
+      {random && <text x={24} y={6} fontSize={6.5} fontWeight={700} fill="currentColor">?</text>}
+    </svg>
+  );
+}

@@ -858,3 +858,9 @@ select {
   color: var(--text);
   font-weight: 600;
 }
+
+.shape-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

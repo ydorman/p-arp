@@ -25,9 +25,9 @@ export function OnOffButton({ on, label, title, large, onClick }: { on: boolean;
  * the same value is picked again or the menu is dismissed), and then Space opens it instead of
  * reaching Logic's transport. Nothing here can take focus.
  */
-export function Select({ param, labels, title }: { param: string; labels?: string[]; title?: string }) {
+export function Select({ param, labels, title }: { param: string; labels?: ReactNode[]; title?: string }) {
   const p = useParam(param);
-  const options = labels ?? p.spec.choices ?? [];
+  const options: ReactNode[] = labels ?? p.spec.choices ?? [];
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 

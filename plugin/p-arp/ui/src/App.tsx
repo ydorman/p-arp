@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Knob, OnOff, OnOffButton, Segmented, Select } from "./components/controls";
-import { PatternIcon } from "./components/icons";
+import { PatternIcon, ShapeIcon } from "./components/icons";
 import { PATTERN_NAMES } from "./params/spec";
 import { GateRow, HumanizeRow, OctaveRow, PatternRow, RateRow, SwingRow, VelocityRow } from "./components/Targets";
 import { useEngineStatus } from "./hooks/useEngineStatus";
@@ -8,11 +8,13 @@ import { CurveControl } from "./components/CurveEditor";
 import { LiveView } from "./components/LiveView";
 import { nativeFunction } from "./native";
 
-const SHAPES = [
-  { label: "↗", title: "Up: rise through the range, then jump back" },
-  { label: "↘", title: "Down: fall through the range, then jump back" },
-  { label: "⋀", title: "Up-Down: start at the base, bounce between the ends" },
-];
+// Shape menu entries: a small diagram of the path (dot = where it starts) and the name
+const SHAPES = ["Up", "Down", "Up-Down", "Down-Up", "Triangle", "Random"].map((name, i) => (
+  <span className="shape-option">
+    <ShapeIcon shape={i} size={11} />
+    {name}
+  </span>
+));
 
 function Labeled({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -63,7 +65,7 @@ export function App() {
             <Segmented param="pattern" options={PATTERN_NAMES.map((name, i) => ({ label: <PatternIcon pattern={i} size={18} />, title: name }))} title="Base arp pattern" />
           </Labeled>
           <Labeled label="Shape">
-            <Segmented param="shape" options={SHAPES} title="How the progressions move through their ranges" />
+            <Select param="shape" labels={SHAPES} title="How the progressions move through their ranges. Up / Down: sweep and jump back. Up-Down / Down-Up: from the base to one end, the other, and back. Triangle: from the min up and back down. Random: a random other value each step." />
           </Labeled>
           <Labeled label="Advance">
             <Select param="advanceTrigger" title="When the progressions take a step" />

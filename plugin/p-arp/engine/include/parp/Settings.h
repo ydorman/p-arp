@@ -8,7 +8,7 @@ namespace parp
 
 // Menu choices. Enumerator order = menu order in the Scripter prototype.
 enum class AdvanceTrigger { ArpCycle, NoteStep, Beat, Bar, TwoBars };
-enum class Shape { Up, Down, UpDown };
+enum class Shape { Up, Down, UpDown, DownUp, Triangle, Random };
 enum class LinkMode { Free, Locked, Restart };
 enum class Curve { Linear, Accelerating, Decelerating, Fibonacci, Primes, Random, Custom };
 enum class Pattern { Up, Down, UpDown, DownUp, AsPlayed, Random };

@@ -12,7 +12,7 @@ cycle, swells toward the end of a loop, or drifts in and out of swing.
 - Classic arpeggiator: patterns (Up, Down, Up/Down, Down/Up, As Played, Random), 24 tempo-synced
   rates (straight, dotted, triplet), octave range, gate, velocity, swing, latch.
 - **Progressions**: each of those settings can follow a series around its base value, with its
-  own spread below and above, number of steps, and shape (up, down or triangle).
+  own spread below and above, number of steps, and shape (up, down, up-down, down-up, triangle or random).
 - Series curves (linear, accelerating, Fibonacci, primes, random, or a custom drawn curve), linked
   or free-running series, and one Global Range control to widen or narrow everything at once.
 - Locked to Logic's transport, including cycle loops; no stuck notes on loop wraps or stop.

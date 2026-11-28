@@ -30,7 +30,7 @@ struct Bounds
 struct SeriesPosition
 {
     int pos = 0;
-    int dir = 1; // +1 / -1 (direction for the Up-Down shape)
+    int dir = 1; // +1 / -1 (direction for the bouncing shapes: Up-Down, Down-Up, Triangle)
 };
 
 // Set of series (bit per SeriesId), e.g. which series just completed a pass
@@ -55,11 +55,17 @@ struct SettingsChangeResult
 // JavaScript Math.round (rounds .5 up, also for negatives), so results match the prototype
 double jsRound (double value);
 
-// Step a value across [minVal, maxVal] with the given shape (Up / Down sawtooth, Up-Down triangle)
+// Step a value across [minVal, maxVal] with the given shape (Up / Down sawtooth; Up-Down, Down-Up
+// and Triangle bounce between the ends). Random needs a generator, so Progression handles it; here
+// it steps like Up.
 SeriesPosition stepSeriesValue (SeriesPosition current, int minVal, int maxVal, Shape shape);
 
-// Starting point for a shape: Up starts at min, Down at max, Up-Down at the base
+// Starting point for a shape: Up and Triangle start at min, Down at max, Up-Down, Down-Up and
+// Random at the base (Up-Down heading up, Down-Up heading down)
 SeriesPosition seriesStart (Shape shape, int minVal, int base, int maxVal);
+
+// Advances in one full pass over a range of span + 1 values (span = max - min > 0)
+int shapePassLength (Shape shape, int span);
 
 // Static description of the series for given settings
 bool isSeriesActive (SeriesId id, const Settings& s);
@@ -121,12 +127,16 @@ private:
     static LinkRange linkRange (const Settings& s);
     static int linkedPos (SeriesId id, int masterPos, LinkRange range, const Settings& s);
     static int passLength (SeriesId id, Shape shape, const Settings& s);
+    // One step of a series or of the link position. Random: a random other position in range,
+    // counting advances in `count` to report a completed pass (true) after one pass length.
+    SeriesPosition stepPosition (SeriesPosition p, int minVal, int maxVal, Shape shape, int& count, bool& completed);
 
     Random& rng;
     unsigned resets = 0;
     std::array<SeriesPosition, numSeries> positions {};
-    struct { int pos = 0; int dir = 1; int count = 0; } link;
-    struct { int index = 0; int dir = 1; int lastRandom = -1; } curve;
+    std::array<int, numSeries> randomCounts {}; // Random shape: advances since the pass started
+    struct { int pos = 0; int dir = 1; int count = 0; int randomCount = 0; } link;
+    struct { int index = 0; int dir = 1; int lastRandom = -1; int count = 0; } curve;
 };
 
 } // namespace parp

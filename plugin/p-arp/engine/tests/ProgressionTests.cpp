@@ -761,3 +761,190 @@ TEST_CASE ("curve: works with Global Range (scales into the narrower range)")
     const auto velocity = walkCurve (s, 2).first;
     CHECK_EQ (valuesAt (SeriesId::Velocity, s, velocity), (Vec { 58, 82 }));
 }
+
+// ---------------------------------------------------------------------------------------------
+// progression shapes: Down-Up, Triangle, Random (plugin only; not in the prototype)
+// ---------------------------------------------------------------------------------------------
+
+namespace
+{
+// Octave 1..3 around base 2 (Range mode)
+Settings octaveShape (Shape shape)
+{
+    Settings s;
+    s.shape = shape;
+    s.baseOctave = 2;
+    s.octaveActive = true;
+    s.octaveSpreadDown = 1;
+    s.octaveSpreadUp = 1;
+    return s;
+}
+
+// Octave positions before and after each of `steps` advances, and the advances that completed a pass
+std::pair<Vec, Vec> walkOctave (const Settings& s, int steps, std::uint64_t seed = 1)
+{
+    Fixture f (s);
+    f.rng.setSeed (seed);
+    Vec seen { f.pos (SeriesId::Octave) }, passes;
+    for (int i = 0; i < steps; ++i)
+    {
+        if (f.advance().contains (SeriesId::Octave))
+            passes.push_back (i + 1);
+        seen.push_back (f.pos (SeriesId::Octave));
+    }
+    return { seen, passes };
+}
+} // namespace
+
+TEST_CASE ("shape Down-Up: base, down to min, up to max, back to the base")
+{
+    const auto [seen, passes] = walkOctave (octaveShape (Shape::DownUp), 8);
+    CHECK_EQ (seen, (Vec { 2, 1, 2, 3, 2, 1, 2, 3, 2 }));
+    CHECK_EQ (passes, (Vec { 4, 8 }));
+}
+
+TEST_CASE ("shape Down-Up with the base at the bottom starts upward")
+{
+    auto s = octaveShape (Shape::DownUp);
+    s.baseOctave = 1;
+    s.octaveSpreadUp = 2;
+    const auto [seen, passes] = walkOctave (s, 4);
+    CHECK_EQ (seen, (Vec { 1, 2, 3, 2, 1 }));
+    CHECK_EQ (passes, (Vec { 4 }));
+}
+
+TEST_CASE ("shape Up-Down still starts at the base heading up, a pass is twice the span")
+{
+    const auto [seen, passes] = walkOctave (octaveShape (Shape::UpDown), 4);
+    CHECK_EQ (seen, (Vec { 2, 3, 2, 1, 2 }));
+    CHECK_EQ (passes, (Vec { 4 }));
+}
+
+TEST_CASE ("shape Triangle: starts at min, min -> max -> min")
+{
+    const auto [seen, passes] = walkOctave (octaveShape (Shape::Triangle), 8);
+    CHECK_EQ (seen, (Vec { 1, 2, 3, 2, 1, 2, 3, 2, 1 }));
+    CHECK_EQ (passes, (Vec { 4, 8 }));
+}
+
+TEST_CASE ("shape Random: starts at the base, never repeats, stays in range, a pass = number of values")
+{
+    auto s = octaveShape (Shape::Random);
+    s.baseOctave = 2;
+    s.octaveSpreadDown = 1;
+    s.octaveSpreadUp = 2; // 1..4
+    const auto [seen, passes] = walkOctave (s, 40, 7);
+    CHECK_EQ (seen[0], 2);
+    for (size_t i = 1; i < seen.size(); ++i)
+    {
+        CHECK (seen[i] != seen[i - 1]);
+        CHECK (seen[i] >= 1 && seen[i] <= 4);
+    }
+    CHECK_EQ (std::set<int> (seen.begin(), seen.end()).size(), size_t (4));
+    CHECK_EQ (passes, (Vec { 4, 8, 12, 16, 20, 24, 28, 32, 36, 40 }));
+}
+
+TEST_CASE ("shape Random: a single-value range holds still and never completes")
+{
+    auto s = octaveShape (Shape::Random);
+    s.octaveSpreadDown = 0;
+    s.octaveSpreadUp = 0;
+    const auto [seen, passes] = walkOctave (s, 5);
+    CHECK_EQ (seen, (Vec { 2, 2, 2, 2, 2, 2 }));
+    CHECK (passes.empty());
+}
+
+TEST_CASE ("shape Random, Free: each series moves independently")
+{
+    Fixture f (twoSeries (LinkMode::Free, Shape::Random));
+    f.rng.setSeed (3);
+    bool diverged = false;
+    for (int i = 0; i < 30; ++i)
+    {
+        const int octave = f.pos (SeriesId::Octave), velocity = f.pos (SeriesId::Velocity);
+        f.advance();
+        CHECK (f.pos (SeriesId::Octave) != octave);
+        CHECK (f.pos (SeriesId::Velocity) != velocity);
+        // Locked would map octave 1..3 onto velocity's upper half only (base at octave's min)
+        if (f.pos (SeriesId::Velocity) < 0 && f.pos (SeriesId::Octave) > 1)
+            diverged = true;
+    }
+    CHECK (diverged);
+}
+
+TEST_CASE ("shape Random, Locked: one random shared position, mapped onto every range")
+{
+    Fixture f (twoSeries (LinkMode::Locked, Shape::Random));
+    f.rng.setSeed (3);
+    Vec passes;
+    for (int i = 0; i < 27; ++i)
+    {
+        const int velocity = f.pos (SeriesId::Velocity);
+        if (! f.advance().empty())
+            passes.push_back (i + 1);
+        const int v = f.pos (SeriesId::Velocity);
+        CHECK (v != velocity);
+        // octave (base 1, 0..+2 above) follows the shared position: at its base whenever velocity is at or below its base
+        const int expectedOctave = v <= 0 ? 1 : 1 + int (jsRound (double (v) / 4.0 * 2.0));
+        CHECK_EQ (f.pos (SeriesId::Octave), expectedOctave);
+    }
+    CHECK_EQ (passes, (Vec { 9, 18, 27 })); // velocity's 9 values
+}
+
+TEST_CASE ("shape Random, Restart: all restart after the longest series' number of values")
+{
+    Fixture f (twoSeries (LinkMode::Restart, Shape::Random));
+    f.rng.setSeed (3);
+    Vec passes;
+    for (int i = 0; i < 18; ++i)
+        if (! f.advance().empty())
+            passes.push_back (i + 1);
+    CHECK_EQ (passes, (Vec { 9, 18 }));
+    CHECK_EQ (f.pos (SeriesId::Velocity), 0); // restarted at the base
+}
+
+TEST_CASE ("shape Down-Up and Triangle with Link Locked")
+{
+    CHECK_EQ (walkOctaveVelocity (twoSeries (LinkMode::Locked, Shape::DownUp), 8).second,
+              (Vec { 0, -1, -2, -3, -4, -3, -2, -1, 0 }));
+    CHECK_EQ (walkOctaveVelocity (twoSeries (LinkMode::Locked, Shape::Triangle), 9).second,
+              (Vec { -4, -3, -2, -1, 0, 1, 2, 3, 4, 3 }));
+}
+
+TEST_CASE ("shape Down-Up / Triangle on a curve: backward then forward / forward then back")
+{
+    CHECK_EQ (walkCurve (custom (curveSet (Curve::Linear, Shape::DownUp), { 1, 5, 6, 8 }), 8).first,
+              (Vec { 4, 2, 1, -4, 1, 2, 4, 2 }));
+    CHECK_EQ (walkCurve (custom (curveSet (Curve::Linear, Shape::Triangle), { 1, 5, 6, 8 }), 8).first,
+              (Vec { -4, 1, 2, 4, 2, 1, -4, 1 }));
+}
+
+TEST_CASE ("shape Random on a curve: random curve steps, no repeats, a pass = number of steps")
+{
+    auto s = custom (curveSet (Curve::Linear, Shape::Random), { 1, 5, 6, 8 });
+    Fixture f (s);
+    f.rng.setSeed (9);
+    Vec seen, passes;
+    for (int i = 0; i < 12; ++i)
+    {
+        seen.push_back (f.progression.curveIndex());
+        if (! f.advance().empty())
+            passes.push_back (i + 1);
+    }
+    for (size_t i = 1; i < seen.size(); ++i)
+        CHECK (seen[i] != seen[i - 1]);
+    CHECK_EQ (std::set<int> (seen.begin(), seen.end()).size(), size_t (4));
+    CHECK_EQ (passes, (Vec { 4, 8, 12 }));
+}
+
+TEST_CASE ("shape: changing the shape restarts the series at the new shape's start")
+{
+    Fixture f (octaveShape (Shape::Up));
+    f.advance();
+    f.change ([] (Settings& x) { x.shape = Shape::Triangle; });
+    CHECK_EQ (f.pos (SeriesId::Octave), 1);
+    f.change ([] (Settings& x) { x.shape = Shape::DownUp; });
+    CHECK_EQ (f.pos (SeriesId::Octave), 2);
+    f.advance();
+    CHECK_EQ (f.pos (SeriesId::Octave), 1);
+}

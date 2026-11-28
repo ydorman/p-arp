@@ -9,7 +9,7 @@ namespace parp
 namespace
 {
 constexpr std::string_view triggerNames[] = { "Per Arp Cycle", "Per Note Step", "Per Beat", "Per Bar", "Per 2 Bars" };
-constexpr std::string_view shapeNames[] = { "Up", "Down", "Up-Down (Triangle)" };
+constexpr std::string_view shapeNames[] = { "Up", "Down", "Up-Down", "Down-Up", "Triangle", "Random" };
 constexpr std::string_view linkNames[] = { "Free", "Locked", "Restart" };
 constexpr std::string_view curveNames[] = { "Linear", "Accelerating", "Decelerating", "Fibonacci", "Primes", "Random", "Custom" };
 constexpr std::string_view patternNames[] = { "Up", "Down", "Up/Down", "Down/Up", "As Played", "Random" };
@@ -39,7 +39,7 @@ std::vector<ParamSpec> buildSpecs()
         // Global
         { "latch", "Latch Chord", "Global", K::Bool, 0, 1, "", none, PARP_BOOL (latch) },
         { "advanceTrigger", "Advance Trigger", "Global", K::Choice, 0, 4, "", triggerNames, PARP_ENUM (advanceTrigger, AdvanceTrigger) },
-        { "shape", "Progression Shape", "Global", K::Choice, 0, 2, "", shapeNames, PARP_ENUM (shape, Shape) },
+        { "shape", "Progression Shape", "Global", K::Choice, 0, 5, "", shapeNames, PARP_ENUM (shape, Shape) },
         { "link", "Link", "Global", K::Choice, 0, 2, "", linkNames, PARP_ENUM (link, LinkMode) },
         { "globalRange", "Global Range", "Global", K::Int, 0, 100, "%", none, PARP_INT (globalRange) },
         { "curve", "Series Curve", "Global", K::Choice, 0, 6, "", curveNames, PARP_ENUM (curve, Curve) },

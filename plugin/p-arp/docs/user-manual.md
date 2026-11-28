@@ -234,11 +234,18 @@ How each progression moves through its range:
 
 | Shape | Movement |
 |---|---|
-| **↗ Up** | from the lowest value to the highest, then jumps back to the lowest |
-| **↘ Down** | from the highest to the lowest, then jumps back to the highest |
-| **⋀ Up-Down** | starts at the base, rises to the highest, falls to the lowest, returns to the base |
+| **Up** | from the lowest value to the highest, then jumps back to the lowest |
+| **Down** | from the highest to the lowest, then jumps back to the highest |
+| **Up-Down** | starts at the base, rises to the highest, falls to the lowest, returns to the base |
+| **Down-Up** | starts at the base, falls to the lowest, rises to the highest, returns to the base |
+| **Triangle** | starts at the lowest, rises to the highest, falls back to the lowest |
+| **Random** | starts at the base, then jumps to a random other value on every step |
 
-An Up-Down pass is about twice as long as an Up or Down pass over the same range.
+The diagram next to each name in the menu shows the path; the dot is where it starts. Up-Down,
+Down-Up and Triangle passes are about twice as long as an Up or Down pass over the same range. A
+Random pass counts as many steps as the range has values (this matters for **Link: Restart** and
+the **Flow** rate timing). With **Link: Locked**, Random picks one random position that all progressions
+share; with **Free**, each jumps on its own.
 
 ### Advance
 
@@ -289,8 +296,9 @@ together, each over its own range (Link has no effect while a curve other than L
 | **Random** | a random step each time, never the same twice in a row |
 | **Custom** | your own steps, drawn in the curve editor |
 
-The bars next to the menu preview the curve. **Shape** plays the curve forward (Up), backward (Down)
-or forward then back (Up-Down); the Random curve ignores Shape.
+The bars next to the menu preview the curve. **Shape** plays the curve forward (Up), backward (Down),
+forward then back (Up-Down, Triangle), backward then forward (Down-Up) or in random order
+(Random); the Random curve ignores Shape.
 
 **How a curve maps to values:** the curve's shape is stretched over each progression's range. The
 curve's **lowest** step plays the range's lowest value and its **highest** step plays the highest
@@ -478,7 +486,7 @@ The names Logic shows in automation and its parameter list, with their ranges an
 | **Global** | | |
 | Latch Chord | Off / On | Off |
 | Advance Trigger | Per Arp Cycle, Per Note Step, Per Beat, Per Bar, Per 2 Bars | Per Arp Cycle |
-| Progression Shape | Up, Down, Up-Down | Up |
+| Progression Shape | Up, Down, Up-Down, Down-Up, Triangle, Random | Up |
 | Link | Free, Locked, Restart | Free |
 | Global Range (Depth) | 0–100% | 100% |
 | Series Curve | Linear, Accelerating, Decelerating, Fibonacci, Primes, Random, Custom | Linear |

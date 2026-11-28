@@ -38,6 +38,7 @@ SeriesPosition stepSeriesValue (SeriesPosition current, int minVal, int maxVal, 
     switch (shape)
     {
         case Shape::Up: // min -> ... -> max -> min
+        case Shape::Random: // (stepped by Progression::stepPosition)
             if (++val > maxVal)
                 val = minVal;
             dir = 1;
@@ -47,7 +48,9 @@ SeriesPosition stepSeriesValue (SeriesPosition current, int minVal, int maxVal, 
                 val = maxVal;
             dir = -1;
             break;
-        case Shape::UpDown: // bounce without repeating the ends
+        case Shape::UpDown: // bounce without repeating the ends; the start sets the direction
+        case Shape::DownUp:
+        case Shape::Triangle:
             if (dir >= 0)
             {
                 if (++val >= maxVal)
@@ -71,11 +74,36 @@ SeriesPosition stepSeriesValue (SeriesPosition current, int minVal, int maxVal, 
 
 SeriesPosition seriesStart (Shape shape, int minVal, int base, int maxVal)
 {
-    if (shape == Shape::Up)
-        return { minVal, 1 };
-    if (shape == Shape::Down)
-        return { maxVal, -1 };
+    switch (shape)
+    {
+        case Shape::Up:
+        case Shape::Triangle: // min -> max -> min
+            return { minVal, 1 };
+        case Shape::Down:
+            return { maxVal, -1 };
+        case Shape::DownUp: // base -> min -> max -> base
+            return { base, base > minVal ? -1 : 1 };
+        case Shape::UpDown: // base -> max -> min -> base
+        case Shape::Random:
+            break;
+    }
     return { base, base < maxVal ? 1 : -1 };
+}
+
+int shapePassLength (Shape shape, int span)
+{
+    switch (shape)
+    {
+        case Shape::UpDown:
+        case Shape::DownUp:
+        case Shape::Triangle:
+            return 2 * span;
+        case Shape::Up:
+        case Shape::Down:
+        case Shape::Random: // as many advances as the range has values
+            break;
+    }
+    return span + 1;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -282,6 +310,29 @@ void Progression::resetSeries (SeriesId id, const Settings& s)
     const auto b = seriesBounds (id, s);
     const auto start = seriesStart (s.shape, b.minPos, b.basePos, b.maxPos);
     positions[(size_t) id] = start;
+    randomCounts[(size_t) id] = 0;
+}
+
+SeriesPosition Progression::stepPosition (SeriesPosition p, int minVal, int maxVal, Shape shape, int& count, bool& completed)
+{
+    completed = false;
+    if (shape != Shape::Random)
+    {
+        return stepSeriesValue (p, minVal, maxVal, shape);
+    }
+    if (minVal >= maxVal)
+        return { minVal, 1 };
+    // A random position other than the current one (uniform over the others)
+    const int current = std::clamp (p.pos, minVal, maxVal);
+    int pos = minVal + rng.nextInt (maxVal - minVal);
+    if (pos >= current)
+        ++pos;
+    if (++count >= shapePassLength (shape, maxVal - minVal))
+    {
+        count = 0;
+        completed = true;
+    }
+    return { pos, 1 };
 }
 
 void Progression::reset (const Settings& s)
@@ -294,6 +345,7 @@ void Progression::reset (const Settings& s)
     link.pos = start.pos;
     link.dir = start.dir;
     link.count = 0;
+    link.randomCount = 0;
     if (s.curve != Curve::Linear)
         resetCurve (s);
 }
@@ -329,9 +381,11 @@ SeriesSet Progression::advanceIndependent (const Settings& s, bool isCycleEnd)
             continue;
         const auto b = seriesBounds (id, s);
         auto& p = positions[(size_t) id];
-        p = stepSeriesValue (p, b.minPos, b.maxPos, s.shape);
+        bool randomPassDone = false;
+        p = stepPosition (p, b.minPos, b.maxPos, s.shape, randomCounts[(size_t) id], randomPassDone);
         const auto start = seriesStart (s.shape, b.minPos, b.basePos, b.maxPos);
-        if (b.minPos < b.maxPos && p.pos == start.pos && p.dir == start.dir)
+        const bool backAtStart = s.shape != Shape::Random && p.pos == start.pos && p.dir == start.dir;
+        if (b.minPos < b.maxPos && (backAtStart || randomPassDone))
             completed.add (id);
     }
     return completed;
@@ -368,7 +422,8 @@ int Progression::linkedPos (SeriesId id, int masterPos, LinkRange range, const S
 SeriesSet Progression::advanceLocked (const Settings& s, bool isCycleEnd)
 {
     const auto range = linkRange (s);
-    const auto stepped = stepSeriesValue ({ link.pos, link.dir }, -range.down, range.up, s.shape);
+    bool randomPassDone = false;
+    const auto stepped = stepPosition ({ link.pos, link.dir }, -range.down, range.up, s.shape, link.randomCount, randomPassDone);
     link.pos = stepped.pos;
     link.dir = stepped.dir;
     for (auto id : allSeries)
@@ -378,7 +433,8 @@ SeriesSet Progression::advanceLocked (const Settings& s, bool isCycleEnd)
         positions[(size_t) id] = { linkedPos (id, link.pos, range, s), link.dir };
     }
     const auto start = seriesStart (s.shape, -range.down, 0, range.up);
-    if (range.down + range.up > 0 && link.pos == start.pos && link.dir == start.dir)
+    const bool backAtStart = s.shape != Shape::Random && link.pos == start.pos && link.dir == start.dir;
+    if (range.down + range.up > 0 && (backAtStart || randomPassDone))
         return allActive (s);
     return {};
 }
@@ -389,7 +445,7 @@ int Progression::passLength (SeriesId id, Shape shape, const Settings& s)
     const int span = b.maxPos - b.minPos;
     if (span == 0)
         return 1;
-    return shape == Shape::UpDown ? 2 * span : span + 1;
+    return shapePassLength (shape, span);
 }
 
 SeriesSet Progression::advanceRestart (const Settings& s, bool isCycleEnd)
@@ -454,14 +510,33 @@ int Progression::pickRandomStep (int count)
     return index;
 }
 
+namespace
+{
+// Where a shape starts in a curve's step list. A list has no base: Down and Down-Up play it
+// backward first, the others forward (so Up-Down and Triangle both go forward then back).
+SeriesPosition curveStart (Shape shape, int last)
+{
+    if (shape == Shape::Down || shape == Shape::DownUp)
+        return { last, -1 };
+    return { 0, 1 };
+}
+
+bool isRandomCurve (const Settings& s)
+{
+    return s.curve == Curve::Random || s.shape == Shape::Random;
+}
+} // namespace
+
 void Progression::resetCurve (const Settings& s)
 {
     std::array<double, maxCustomSteps> steps {};
     const int last = curveSteps (s, steps) - 1;
-    curve.index = s.shape == Shape::Down ? last : 0; // Down plays the list backward
-    curve.dir = s.shape == Shape::Down ? -1 : 1;
+    const auto start = curveStart (s.shape, last);
+    curve.index = start.pos;
+    curve.dir = start.dir;
     curve.lastRandom = -1;
-    if (s.curve == Curve::Random)
+    curve.count = 0;
+    if (isRandomCurve (s))
         curve.index = pickRandomStep (last + 1);
     applyCurve (s, true);
 }
@@ -471,18 +546,24 @@ SeriesSet Progression::advanceCurve (const Settings& s, bool isCycleEnd)
     std::array<double, maxCustomSteps> steps {};
     const int last = curveSteps (s, steps) - 1;
     bool completed = false;
-    if (s.curve == Curve::Random)
+    if (isRandomCurve (s))
     {
         curve.index = pickRandomStep (last + 1);
+        // The Random curve never completes a pass; the Random shape does after as many advances
+        // as the curve has steps
+        if (s.shape == Shape::Random && last > 0 && ++curve.count > last)
+        {
+            curve.count = 0;
+            completed = true;
+        }
     }
     else
     {
         const auto stepped = stepSeriesValue ({ curve.index, curve.dir }, 0, last, s.shape);
         curve.index = stepped.pos;
         curve.dir = stepped.dir;
-        const int startIndex = s.shape == Shape::Down ? last : 0;
-        const int startDir = s.shape == Shape::Down ? -1 : 1;
-        completed = last > 0 && curve.index == startIndex && curve.dir == startDir;
+        const auto start = curveStart (s.shape, last);
+        completed = last > 0 && curve.index == start.pos && curve.dir == start.dir;
     }
     applyCurve (s, isCycleEnd);
     return completed ? allActive (s) : SeriesSet {};
