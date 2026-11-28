@@ -21,6 +21,7 @@ public:
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout&) const override { return true; }
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -53,6 +54,8 @@ public:
         std::atomic<double> ppq { 0.0 };
         std::atomic<double> timeline { 0.0 }; // see parp::EngineStatus::timeline
         std::atomic<double> beatsPerBar { 4.0 };
+        std::atomic<std::uint64_t> blocksProcessed { 0 }; // processBlock calls (bypassed blocks not counted)
+        std::atomic<bool> bypassed { false };              // host bypass via processBlockBypassed
     } uiStatus;
 
     // Live view: generated notes, fed only while an editor is open (set by the editor)

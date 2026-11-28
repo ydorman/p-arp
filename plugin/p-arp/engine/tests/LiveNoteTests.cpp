@@ -3,6 +3,7 @@
 #include <cmath>
 #include <memory>
 #include "HostSim.h"
+#include "parp/ActivityWatch.h"
 #include "TestHarness.h"
 
 using namespace parp;
@@ -74,4 +75,74 @@ TEST_CASE ("live notes: the timeline keeps going across a loop wrap and stands s
     CHECK_EQ (notes[4].beat, 1.0); // wrapped (loop of 4 eighths)
     host.stop();
     CHECK (near (host.engine.status().timeline, 5.0));
+}
+
+// ---------------------------------------------------------------------------------------------
+// activity watch: the live view notices when the plugin is switched off
+// ---------------------------------------------------------------------------------------------
+
+TEST_CASE ("activity watch: running while blocks keep coming")
+{
+    ActivityWatch watch;
+    for (std::uint64_t blocks = 1; blocks <= 50; ++blocks)
+    {
+        const auto r = watch.tick (blocks, false, true);
+        CHECK (r.running);
+        CHECK (! r.clear);
+    }
+}
+
+TEST_CASE ("activity watch: blocks stop while playing (plugin turned off) -> stop once, clear once")
+{
+    ActivityWatch watch;
+    watch.tick (10, false, true);
+    std::vector<int> clears;
+    int lastRunningTick = -1;
+    for (int i = 1; i <= 20; ++i)
+    {
+        const auto r = watch.tick (10, false, true); // frozen status still says playing
+        if (r.running)
+            lastRunningTick = i;
+        if (r.clear)
+            clears.push_back (i);
+    }
+    CHECK_EQ (lastRunningTick, ActivityWatch::stallTicks - 1);
+    CHECK_EQ (clears, (std::vector<int> { ActivityWatch::stallTicks }));
+}
+
+TEST_CASE ("activity watch: processBlockBypassed -> not running and clear at once")
+{
+    ActivityWatch watch;
+    watch.tick (10, false, false);
+    const auto r = watch.tick (10, true, false);
+    CHECK (! r.running);
+    CHECK (r.clear);
+    CHECK (! watch.tick (10, true, false).clear);
+}
+
+TEST_CASE ("activity watch: host stops rendering while stopped -> keep the frozen notes")
+{
+    ActivityWatch watch;
+    watch.tick (10, false, false);
+    bool cleared = false, running = true;
+    for (int i = 0; i < 20; ++i)
+    {
+        const auto r = watch.tick (10, false, false);
+        cleared = cleared || r.clear;
+        running = r.running;
+    }
+    CHECK (! running);
+    CHECK (! cleared);
+}
+
+TEST_CASE ("activity watch: turned back on -> running again, clears again on the next stop")
+{
+    ActivityWatch watch;
+    for (int i = 0; i < 10; ++i)
+        watch.tick (10, false, true);
+    CHECK (watch.tick (11, false, true).running);
+    bool cleared = false;
+    for (int i = 0; i < 10; ++i)
+        cleared = watch.tick (11, false, true).clear || cleared;
+    CHECK (cleared);
 }

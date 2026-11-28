@@ -140,10 +140,21 @@ void ParpEditor::setWidth (int width)
 
 void ParpEditor::timerCallback()
 {
+    // Switched off in Logic: the status freezes, so report the transport as stopped (the live
+    // view would otherwise run the playhead ahead and snap back) and clear the live view
+    const bool playing = parpProcessor.uiStatus.playing.load();
+    const auto activityNow = activity.tick (parpProcessor.uiStatus.blocksProcessed.load(), parpProcessor.uiStatus.bypassed.load(), playing);
+    if (activityNow.clear)
+    {
+        parp::LiveNote stale;
+        while (parpProcessor.liveNotes.pop (stale)) {}
+        browser.emitEventIfBrowserIsVisible ("liveClear", juce::var());
+    }
+
     auto* status = new juce::DynamicObject();
     status->setProperty ("noteOnsIn", parpProcessor.uiStatus.noteOnsIn.load());
     status->setProperty ("noteOnsOut", parpProcessor.uiStatus.noteOnsOut.load());
-    status->setProperty ("playing", parpProcessor.uiStatus.playing.load());
+    status->setProperty ("playing", playing && activityNow.running);
     status->setProperty ("bpm", parpProcessor.uiStatus.bpm.load());
     status->setProperty ("ppq", parpProcessor.uiStatus.ppq.load());
     status->setProperty ("timeline", parpProcessor.uiStatus.timeline.load());

@@ -1,12 +1,14 @@
 #pragma once
 
 #include <juce_gui_extra/juce_gui_extra.h>
+#include <parp/ActivityWatch.h>
 #include "PluginProcessor.h"
 
 // Hosts the React UI in a web view. Every parameter in the engine's table gets a JUCE relay (named
 // by the parameter id) and an attachment binding it to the host parameter, so UI controls read and
 // write the real parameters (incl. automation gestures). Engine status is pushed to the page as
-// "engineStatus" events; generated notes are sent as "liveNotes" batches while the editor is open.
+// "engineStatus" events; generated notes are sent as "liveNotes" batches while the editor is open,
+// and "liveClear" when the plugin is switched off.
 //
 // Release builds serve the UI from the zip embedded in the binary. Builds configured with
 // PARP_UI_DEV_SERVER=ON load it from the Vite dev server instead (hot reload inside Logic).
@@ -40,6 +42,7 @@ private:
 
     ParpProcessor& parpProcessor;
     juce::ZipFile uiZip;
+    parp::ActivityWatch activity; // notices the plugin being switched off (clears the live view)
 
     // Declaration order matters: relays before the browser (its options reference them),
     // attachments (created in the constructor) after both.

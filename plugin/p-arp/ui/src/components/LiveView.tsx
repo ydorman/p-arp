@@ -2,7 +2,7 @@
 // in the notes' placement and length; velocity in their color (Logic's piano roll scale: purple
 // for soft, through blue, green and yellow, to red for 127). Drawn on a canvas every animation
 // frame from the live feed (no React state per frame). When the transport stops the view freezes
-// on the last notes.
+// on the last notes; when the plugin is switched off in Logic while playing, it clears.
 
 import { useEffect, useRef } from "react";
 import { feed, playhead } from "../live/liveFeed";

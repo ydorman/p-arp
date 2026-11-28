@@ -59,6 +59,10 @@ if (inPlugin) {
   window.__JUCE__.backend.addEventListener("engineStatus", (status: Omit<LiveStatus, "receivedAt">) => {
     feed.status = { ...status, receivedAt: performance.now() };
   });
+  // The plugin was switched off in Logic: its notes are no longer playing
+  window.__JUCE__.backend.addEventListener("liveClear", () => {
+    feed.notes = [];
+  });
 } else {
   startDemo();
 }

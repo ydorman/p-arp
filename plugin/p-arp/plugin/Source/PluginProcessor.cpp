@@ -173,6 +173,15 @@ void ParpProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     uiStatus.ppq.store (transport.ppqAtBlockStart, std::memory_order_relaxed);
     uiStatus.timeline.store (status.timeline, std::memory_order_relaxed);
     uiStatus.beatsPerBar.store (transport.timeSigNumerator * 4.0 / std::max (1, transport.timeSigDenominator), std::memory_order_relaxed);
+    uiStatus.bypassed.store (false, std::memory_order_relaxed);
+    uiStatus.blocksProcessed.fetch_add (1, std::memory_order_relaxed);
+}
+
+// Host bypass: MIDI passes through untouched; tell the live view (see parp::ActivityWatch)
+void ParpProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+{
+    buffer.clear();
+    uiStatus.bypassed.store (true, std::memory_order_relaxed);
 }
 
 // Factory presets embedded from presets/*.xml, in file name order
