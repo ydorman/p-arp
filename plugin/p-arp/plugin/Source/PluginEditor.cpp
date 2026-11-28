@@ -1,11 +1,39 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
+#include <parp/ProgressionInfo.h>
 
 namespace
 {
 juce::MemoryInputStream* createUiZipStream()
 {
     return new juce::MemoryInputStream (BinaryData::ui_zip, (size_t) BinaryData::ui_zipSize, false);
+}
+
+// describeProgressions() for the UI: one object per series, keyed like the UI's parameter ids
+juce::var progressionInfo (const parp::Settings& settings)
+{
+    static constexpr const char* names[] = { "pattern", "octave", "rate", "gate", "velocity", "swing" };
+    const auto all = parp::describeProgressions (settings);
+    auto* result = new juce::DynamicObject();
+    for (auto id : parp::allSeries)
+    {
+        const auto& info = all[(size_t) id];
+        auto* item = new juce::DynamicObject();
+        item->setProperty ("active", info.active);
+        item->setProperty ("values", info.values);
+        item->setProperty ("passAdvances", info.passAdvances);
+        item->setProperty ("perCycle", info.perCycle);
+        juce::Array<juce::var> positions, values;
+        for (int i = 0; i < info.curveSteps; ++i)
+        {
+            positions.add (info.curvePos[(size_t) i]);
+            values.add (info.curveValue[(size_t) i]);
+        }
+        item->setProperty ("curvePos", positions);
+        item->setProperty ("curveValue", values);
+        result->setProperty (names[(size_t) id], juce::var (item));
+    }
+    return juce::var (result);
 }
 
 const char* mimeTypeFor (const juce::String& path)
@@ -45,6 +73,9 @@ juce::WebBrowserComponent::Options ParpEditor::createBrowserOptions (ParpEditor&
                        .withNativeFunction ("setDebugLog", [&editor] (const juce::Array<juce::var>& args, auto complete) {
                            editor.parpProcessor.debugLog.setEnabled (args.size() > 0 && (bool) args[0]);
                            complete (editor.parpProcessor.debugLog.isEnabled());
+                       })
+                       .withNativeFunction ("describeProgressions", [&editor] (const juce::Array<juce::var>&, auto complete) {
+                           complete (progressionInfo (editor.parpProcessor.readSettings()));
                        })
                        .withNativeFunction ("setEditorWidth", [&editor] (const juce::Array<juce::var>& args, auto complete) {
                            if (args.size() > 0)

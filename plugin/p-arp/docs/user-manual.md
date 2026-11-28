@@ -212,6 +212,12 @@ How many values a progression has decides how long it takes to come back around:
 
 This matters when you want a progression to fit a loop. See [Recipes](#8-recipes).
 
+You don't have to count: under its on/off button, each active row shows how many values the
+progression has and how long it takes to go through them once, for example **7 values · 7 bars**.
+The length is in the unit of **Advance** (cycles, steps, beats or bars) and follows Shape (Up-Down
+takes about twice as long as Up), Link (Locked: the shared pass; Restart: the longest one) and the
+curve. With the Random curve there is no fixed pass, so the row says **random order**.
+
 ### Octave modes
 
 The menu at the end of the Octave row:
@@ -321,6 +327,11 @@ Click the curve preview, or choose **Custom** in the Curve menu, to open the edi
   again.
 - **Starting from a preset curve:** open the editor while a preset curve (for example Fibonacci) is
   chosen; your first edit copies its steps into the custom curve and switches the menu to Custom.
+
+- **Where the steps land:** while the editor is open, every active range shows small step numbers
+  on the values they play: on the Rate, Octave and Pattern cells (the cells a step plays are
+  outlined) and above the Gate, Velocity and Swing bars. Drawing 2, 2, 5 on a 1-to-4 octave range
+  shows 1 2 on the first cell and 3 on the last. The numbers follow as you draw or move a range.
 
 Close the editor with **Esc** or a click outside it.
 

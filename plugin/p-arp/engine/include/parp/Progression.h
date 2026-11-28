@@ -80,6 +80,12 @@ int seriesValueAt (SeriesId id, int pos, const Settings& s); // pattern index, o
 // Fills `out` (capacity 8) without allocating; returns the number of steps.
 int curveSteps (const Settings& s, std::array<double, maxCustomSteps>& out);
 
+// Where curve step `index` falls in a range, 0 (lowest step = min) .. 1 (highest step = max)
+double curveStepFraction (const Settings& s, int index);
+
+// Position a series plays at curve step `index`
+int curveStepPos (SeriesId id, int index, const Settings& s);
+
 // The series system: positions of all series, Link state and Series Curve state.
 // Real-time safe: no allocation after construction.
 class Progression

@@ -26,13 +26,14 @@ interface CellRangeProps {
   down: number; // cells below the base
   up: number;   // cells above the base
   active: boolean;
+  steps?: number[][]; // curve editor open: the curve steps (1-based) each cell plays
   onBase: (index: number) => void;
   onDown: (cells: number) => void;
   onUp: (cells: number) => void;
   onGesture?: (started: boolean) => void;
 }
 
-export function CellRange({ cells, base, down, up, active, onBase, onDown, onUp, onGesture }: CellRangeProps) {
+export function CellRange({ cells, base, down, up, active, steps, onBase, onDown, onUp, onGesture }: CellRangeProps) {
   const bar = useRef<HTMLDivElement>(null);
   const dragging = useRef<Grip | null>(null);
   const n = cells.length;
@@ -70,11 +71,12 @@ export function CellRange({ cells, base, down, up, active, onBase, onDown, onUp,
         {cells.map((cell, i) => (
           <button
             key={i}
-            className={`cell ${i === base ? "base" : ""} ${active && i >= low && i <= high ? "in-range" : ""}`}
-            title={cell.title}
+            className={`cell ${i === base ? "base" : ""} ${active && i >= low && i <= high ? "in-range" : ""} ${steps?.[i]?.length ? "on-curve" : ""}`}
+            title={steps?.[i]?.length ? `${cell.title} (curve step ${steps[i].join(", ")})` : cell.title}
             onClick={() => onBase(i)}
           >
             {cell.content}
+            {steps?.[i]?.length ? <span className="curve-steps">{steps[i].join(" ")}</span> : null}
           </button>
         ))}
       </div>
@@ -111,6 +113,7 @@ interface TrackRangeProps {
   maxSpreadDown: number;
   maxSpreadUp: number;
   steps: number; // per side (tick marks)
+  curveValues?: number[]; // curve editor open: the value each curve step plays
   active: boolean;
   format: (v: number) => string;
   onBase: (v: number) => void;
@@ -120,7 +123,7 @@ interface TrackRangeProps {
 }
 
 export function TrackRange(props: TrackRangeProps) {
-  const { min, max, base, down, up, maxSpreadDown, maxSpreadUp, steps, active, format, onBase, onDown, onUp, onGesture } = props;
+  const { min, max, base, down, up, maxSpreadDown, maxSpreadUp, steps, curveValues, active, format, onBase, onDown, onUp, onGesture } = props;
   const track = useRef<HTMLDivElement>(null);
   const dragging = useRef<Grip | null>(null);
   const [trackWidth, setTrackWidth] = useState(0);
@@ -184,6 +187,18 @@ export function TrackRange(props: TrackRangeProps) {
   const centers = placeLabels(labels.map((l) => (pct(l.value) / 100) * trackWidth), trackWidth, widths);
   labelRefs.current.length = labels.length;
 
+  // Curve editor open: step numbers above the values they play (steps on one value share a mark),
+  // pushed apart like the value labels
+  const curveMarks: { value: number; steps: number[] }[] = [];
+  curveValues?.forEach((value, i) => {
+    const mark = curveMarks.find((m) => m.value === value);
+    if (mark) mark.steps.push(i + 1);
+    else curveMarks.push({ value, steps: [i + 1] });
+  });
+  curveMarks.sort((a, b) => a.value - b.value);
+  const markWidths = curveMarks.map((m) => m.steps.join(" ").length * CURVE_DIGIT_WIDTH + 2);
+  const markCenters = placeLabels(curveMarks.map((m) => (pct(m.value) / 100) * trackWidth), trackWidth, markWidths);
+
   // Typed values go through the same gesture so the host records them as one automation step
   const typed = (apply: (v: number) => void) => (v: number) => {
     onGesture?.(true);
@@ -193,8 +208,20 @@ export function TrackRange(props: TrackRangeProps) {
 
   return (
     <div className={`track-range ${active ? "" : "off"}`}>
+      {curveMarks.length > 0 && (
+        <div className="track-curve-steps">
+          {curveMarks.map((m, i) => (
+            <span key={m.value} className="curve-steps" style={{ left: markCenters[i] }} title={`curve step ${m.steps.join(", ")}: ${format(m.value)}`}>
+              {m.steps.join(" ")}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="track" ref={track} onPointerDown={grab("base")} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         {active && <div className="track-fill" style={{ left: `${pct(low)}%`, width: `${pct(high) - pct(low)}%` }} />}
+        {curveMarks.map((m) => (
+          <div key={`c${m.value}`} className="track-curve-dot" style={{ left: `${pct(m.value)}%` }} />
+        ))}
         {ticks.map((t, i) => (
           <div key={i} className="track-tick" style={{ left: `${pct(Math.min(max, Math.max(min, t)))}%` }} />
         ))}
@@ -235,6 +262,7 @@ export function TrackRange(props: TrackRangeProps) {
   );
 }
 
+const CURVE_DIGIT_WIDTH = 6; // px per character of a curve step mark (small type)
 const LABEL_WIDTH = 30; // px assumed per value label until measured
 const LABEL_GAP = 4; // px between neighbouring labels
 const LABEL_OVERHANG = 6; // end labels may reach this far past the track (its margin)

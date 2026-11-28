@@ -473,11 +473,11 @@ SeriesSet Progression::advanceRestart (const Settings& s, bool isCycleEnd)
 // Series Curve: all active series follow the same step list (1..8 scale)
 // ---------------------------------------------------------------------------------------------
 
-void Progression::applyCurve (const Settings& s, bool isCycleEnd)
+double curveStepFraction (const Settings& s, int index)
 {
     std::array<double, maxCustomSteps> steps {};
     const int count = curveSteps (s, steps);
-    const double step = steps[(size_t) std::min (curve.index, count - 1)];
+    const double step = steps[(size_t) std::clamp (index, 0, count - 1)];
     // The curve's shape is stretched over each range: its lowest step is the min, its highest the
     // max (so 1, 2 plays min, max even on a 2-value range). A flat curve keeps the 1..8 scale.
     double lowest = steps[0], highest = steps[0];
@@ -491,13 +491,22 @@ void Progression::applyCurve (const Settings& s, bool isCycleEnd)
         lowest = 1.0;
         highest = 8.0;
     }
-    const double fraction = (step - lowest) / (highest - lowest);
+    return (step - lowest) / (highest - lowest);
+}
+
+int curveStepPos (SeriesId id, int index, const Settings& s)
+{
+    const auto b = seriesBounds (id, s);
+    return b.minPos + int (jsRound (curveStepFraction (s, index) * double (b.maxPos - b.minPos)));
+}
+
+void Progression::applyCurve (const Settings& s, bool isCycleEnd)
+{
     for (auto id : allSeries)
     {
         if (! isSeriesActive (id, s) || (isCycleOnly (id) && ! isCycleEnd))
             continue;
-        const auto b = seriesBounds (id, s);
-        positions[(size_t) id].pos = b.minPos + int (jsRound (fraction * double (b.maxPos - b.minPos)));
+        positions[(size_t) id].pos = curveStepPos (id, curve.index, s);
     }
 }
 

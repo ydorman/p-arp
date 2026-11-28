@@ -23,6 +23,12 @@ projects and automation: never change or reuse one (names can change). Adding a 
 piano roll, colored by velocity like Logic's (purple = soft, red = 127). In a plain browser
 (`npm run dev`) it plays a demo feed instead.
 
+**Progression info**: each active row's "7 values · 7 bars" and the curve step numbers shown while
+the curve editor is open come from the engine (`describeProgressions` in
+`engine/src/ProgressionInfo.cpp`, which runs a `Progression` to count them, with tests). The UI
+calls the editor's `describeProgressions` native function after every parameter change; in a plain
+browser there is no engine and they are not shown.
+
 **Debug log**: the **Debug log** switch in the plugin's header (saved with the project, not a
 host parameter) writes the same `[SARP]` lines as the Scripter prototype's Debug Log to
 `~/Library/Logs/p-arp/debug-<date>_<time>.log` (a new file each time it's switched on; click the

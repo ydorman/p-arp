@@ -4,6 +4,7 @@ add_library(parp_engine STATIC
     src/EventLog.cpp
     src/Parameters.cpp
     src/Progression.cpp
+    src/ProgressionInfo.cpp
     src/Rates.cpp
     src/Sequence.cpp)
 

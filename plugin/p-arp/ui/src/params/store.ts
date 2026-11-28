@@ -5,7 +5,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import * as Juce from "../juce/index.js";
-import { SPEC_BY_ID } from "./spec";
+import { PARAMS, SPEC_BY_ID } from "./spec";
 import type { ParamSpec } from "./spec";
 
 export interface Param {
@@ -117,4 +117,10 @@ export function useParam(id: string): Param {
     begin: backend.begin,
     end: backend.end,
   };
+}
+
+/** Calls `onChange` whenever any parameter changes (e.g. to refresh something derived from all). */
+export function subscribeAll(onChange: () => void): () => void {
+  const unsubscribes = PARAMS.map((p) => backendFor(p.id).subscribe(onChange));
+  return () => unsubscribes.forEach((fn) => fn());
 }

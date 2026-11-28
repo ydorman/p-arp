@@ -8,17 +8,48 @@ import { PATTERN_NAMES, RATE_NAMES } from "../params/spec";
 import { CellRange, TrackRange } from "./RangeBar";
 import { Knob, OnOff, Segmented, Select, Stepper } from "./controls";
 import { NoteIcon, PatternIcon } from "./icons";
+import { useCurveEditorOpen } from "./CurveEditor";
+import { describePass, useProgressionInfo } from "../hooks/useProgressionInfo";
+import type { SeriesName } from "../hooks/useProgressionInfo";
 
-function TargetRow({ label, activeParam, children, extras, wide }: { label: string; activeParam?: string; children: ReactNode; extras?: ReactNode; wide?: boolean }) {
+function TargetRow(props: { label: string; activeParam?: string; children: ReactNode; extras?: ReactNode; wide?: boolean; summary?: string | null }) {
+  const { label, activeParam, children, extras, wide, summary } = props;
   return (
     <div className={`target-row ${wide ? "wide" : ""}`}>
       <div className="target-name">
         {activeParam ? <OnOff param={activeParam} label={label} title={`${label} progression on/off`} /> : <span className="target-label">{label}</span>}
+        {summary && (
+          <span className="target-summary" title="Values in the range, and how long the progression takes to go through them once">
+            {summary}
+          </span>
+        )}
       </div>
       <div className="target-control">{children}</div>
       <div className="target-extras">{extras}</div>
     </div>
   );
+}
+
+// What the progression does (from the engine): the row's "7 values · 7 bars" summary, and while the
+// curve editor is open, the steps of the curve (position and value per step)
+function useSeries(series: SeriesName) {
+  const info = useProgressionInfo(series);
+  const trigger = useParam("advanceTrigger").value;
+  const curveOn = useParam("curve").value !== 0;
+  const editorOpen = useCurveEditorOpen();
+  const active = info?.active ?? false;
+  return {
+    summary: active ? describePass(info!, trigger) : null,
+    curve: active && curveOn && editorOpen ? info! : null,
+  };
+}
+
+/** Curve step numbers (1-based) per cell, for cell = cellOf(position) */
+function cellSteps(curvePos: number[] | undefined, cells: number, cellOf: (pos: number) => number): number[][] | undefined {
+  if (!curvePos) return undefined;
+  const marks: number[][] = Array.from({ length: cells }, () => []);
+  curvePos.forEach((pos, i) => marks[cellOf(pos)]?.push(i + 1));
+  return marks;
 }
 
 const gesture = (...params: { begin: () => void; end: () => void }[]) => (started: boolean) =>
@@ -47,11 +78,13 @@ export function RateRow() {
     title: rateInfo[rateIndexOf(family, p)].name,
   }));
   const setFamily = (f: Family) => base.set(rateIndexOf(f, power));
+  const { summary, curve } = useSeries("rate");
 
   return (
     <TargetRow
       label="Rate"
       activeParam="rateActive"
+      summary={summary}
       extras={
         <>
           <div className="segmented small" title="Rate family">
@@ -71,6 +104,7 @@ export function RateRow() {
         down={down.value}
         up={up.value}
         active={active.value !== 0}
+        steps={cellSteps(curve?.curvePos, cells.length, (pos) => pos)}
         onBase={(p) => base.set(rateIndexOf(family, p))}
         onDown={down.set}
         onUp={up.set}
@@ -93,11 +127,13 @@ export function OctaveRow() {
     ? [-3, -2, -1, 0, 1, 2, 3].map((o) => ({ content: o === 0 ? "0" : o > 0 ? `+${o}` : `${o}`, title: `shift ${o} octave(s)` }))
     : [1, 2, 3, 4].map((o) => ({ content: `${o}`, title: `the pattern spans ${o} octave(s)` }));
   const baseCell = transpose ? 3 : base.value - 1;
+  const { summary, curve } = useSeries("octave");
 
   return (
     <TargetRow
       label="Octave"
       activeParam="octaveActive"
+      summary={summary}
       extras={
         <>
           {transpose && <Stepper param="baseOctave" label="octaves" />}
@@ -111,6 +147,7 @@ export function OctaveRow() {
         down={down.value}
         up={up.value}
         active={active.value !== 0}
+        steps={cellSteps(curve?.curvePos, cells.length, (pos) => (transpose ? pos - base.value + 3 : pos - 1))}
         onBase={(i) => (transpose ? undefined : base.set(i + 1))}
         onDown={down.set}
         onUp={up.set}
@@ -125,14 +162,16 @@ export function PatternRow() {
   const active = useParam("patternActive");
   const down = useParam("patternSpreadDown");
   const up = useParam("patternSpreadUp");
+  const { summary, curve } = useSeries("pattern");
   return (
-    <TargetRow label="Pattern" activeParam="patternActive" wide>
+    <TargetRow label="Pattern" activeParam="patternActive" wide summary={summary}>
       <CellRange
         cells={PATTERN_NAMES.map((name, i) => ({ content: <PatternIcon pattern={i} size={20} />, title: name }))}
         base={base.value}
         down={down.value}
         up={up.value}
         active={active.value !== 0}
+        steps={cellSteps(curve?.curvePos, PATTERN_NAMES.length, (pos) => pos)}
         onBase={base.set}
         onDown={down.set}
         onUp={up.set}
@@ -152,6 +191,7 @@ function ScaledRow({ label, id, format }: { label: string; id: "gate" | "velocit
   const down = useParam(`${id}SpreadDown`);
   const up = useParam(`${id}SpreadUp`);
   const steps = useParam(`${id}Steps`).value;
+  const { summary, curve } = useSeries(id);
   if (id === "velocity" && !active.value) {
     // Velocity progression off: notes keep the velocity they were played with
     return (
@@ -163,7 +203,7 @@ function ScaledRow({ label, id, format }: { label: string; id: "gate" | "velocit
     );
   }
   return (
-    <TargetRow label={label} activeParam={`${id}Active`} extras={active.value ? <Stepper param={`${id}Steps`} label="steps ±" /> : null}>
+    <TargetRow label={label} activeParam={`${id}Active`} summary={summary} extras={active.value ? <Stepper param={`${id}Steps`} label="steps ±" /> : null}>
       <TrackRange
         min={base.spec.min}
         max={base.spec.max}
@@ -173,6 +213,7 @@ function ScaledRow({ label, id, format }: { label: string; id: "gate" | "velocit
         maxSpreadDown={down.spec.max}
         maxSpreadUp={up.spec.max}
         steps={steps}
+        curveValues={curve?.curveValue}
         active={active.value !== 0}
         format={format}
         onBase={base.set}

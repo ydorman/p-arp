@@ -67,10 +67,12 @@ public:
     DebugLog debugLog;
     std::atomic<int> editorWidth { 1000 }; // the editor's height follows (fixed aspect ratio)
 
+    // Current parameter values as engine settings (any thread: parameters are atomics)
+    parp::Settings readSettings() const;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     parp::Transport readTransport();
-    parp::Settings readSettings() const;
 
     struct FactoryPreset
     {

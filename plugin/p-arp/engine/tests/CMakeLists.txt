@@ -2,6 +2,7 @@ add_executable(parp_engine_tests
     test_main.cpp
     EngineTests.cpp
     ProgressionTests.cpp
+    ProgressionInfoTests.cpp
     SequenceTests.cpp
     SchedulerTests.cpp
     ParameterTests.cpp

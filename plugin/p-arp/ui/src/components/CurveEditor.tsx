@@ -6,7 +6,7 @@
 // first edit copies them into the custom steps and switches the curve to Custom, so a preset is a
 // starting point.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { Select } from "./controls";
 import { useParam } from "../params/store";
@@ -37,9 +37,26 @@ function useCurve() {
   return { curve, length, steps, isCustom, values };
 }
 
+// Whether the editor is open: shared, so the target rows can show which value each step plays
+let editorOpen = false;
+const openListeners = new Set<() => void>();
+function setOpen(open: boolean) {
+  editorOpen = open;
+  openListeners.forEach((fn) => fn());
+}
+export function useCurveEditorOpen(): boolean {
+  return useSyncExternalStore(
+    (fn) => {
+      openListeners.add(fn);
+      return () => openListeners.delete(fn);
+    },
+    () => editorOpen,
+  );
+}
+
 export function CurveControl() {
   const { curve, values } = useCurve();
-  const [open, setOpen] = useState(false);
+  const open = useCurveEditorOpen();
   const previous = useRef(curve.value);
 
   // Choosing Custom from the menu opens the editor
@@ -178,7 +195,7 @@ function CurveEditor({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <div className="curve-editor-foot">
-        Every active progression follows this shape across its range: the lowest step plays its min, the highest its max. Draw past the end to add steps.
+        Every active progression plays this shape across its range (lowest step = min, highest = max); the numbers on the ranges show where each step lands. Draw past the end to add steps.
       </div>
     </div>
   );
